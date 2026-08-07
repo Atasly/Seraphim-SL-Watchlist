@@ -23,7 +23,7 @@ This matches SeraphimSL behaviour.
 
 | File                                  | Purpose                                              |
 | ------------------------------------- | ---------------------------------------------------- |
-| `seraphim-weekend-scraper_0.2.py`     | The scraper (produces `matches.json`)                |
+| `seraphim-weekend-scraper.py`     | The scraper (produces `matches.json`)                |
 | `generate_site.py`                    | The site generator (produces `docs/index.html`)      |
 | `Stores.txt`                          | Watchlist #1: one store name per line                |
 | `Stores - fatpack.txt`                | Watchlist #2: weekend sales that are mods in fatpack |
@@ -82,35 +82,35 @@ Basic run — everything from the most recent Friday onward, written to
 `matches.json`:
 
 ```powershell
-python seraphim-weekend-scraper_0.2.py
+python seraphim-weekend-scraper.py
 ```
 
 Useful options:
 
 ```powershell
 # custom output file
-python seraphim-weekend-scraper_0.2.py --output matches.json
+python seraphim-weekend-scraper.py --output matches.json
 
 # custom store list
-python seraphim-weekend-scraper_0.2.py --stores-file mystores.txt
+python seraphim-weekend-scraper.py --stores-file mystores.txt
 
 # only events on/after a specific date
-python seraphim-weekend-scraper_0.2.py --since-date 2026-08-01
+python seraphim-weekend-scraper.py --since-date 2026-08-01
 
 # verbose debug logging (stderr)
-python seraphim-weekend-scraper_0.2.py --debug
+python seraphim-weekend-scraper.py --debug
 
 # path to a non-default Facebook cookie file
-python seraphim-weekend-scraper_0.2.py --fb-cookies myfb_cookies.json
+python seraphim-weekend-scraper.py --fb-cookies myfb_cookies.json
 ```
 
 Other sources:
 
 ```powershell
-python seraphim-weekend-scraper_0.2.py --source altsl --listing-url https://altsl.com/
-python seraphim-weekend-scraper_0.2.py --source wordpress --listing-url https://35lsunday.com/
-python seraphim-weekend-scraper_0.2.py --source wix --listing-url https://hypeeventssl.wixsite.com/hypeeventssl/miix-weekend-gallery
-python seraphim-weekend-scraper_0.2.py --source evoshop --listing-url https://home.evoshopevent.com/
+python seraphim-weekend-scraper.py --source altsl --listing-url https://altsl.com/
+python seraphim-weekend-scraper.py --source wordpress --listing-url https://35lsunday.com/
+python seraphim-weekend-scraper.py --source wix --listing-url https://hypeeventssl.wixsite.com/hypeeventssl/miix-weekend-gallery
+python seraphim-weekend-scraper.py --source evoshop --listing-url https://home.evoshopevent.com/
 ```
 
 ## Build the website
@@ -129,7 +129,7 @@ with one `--output` per list (same order). Every gallery is fetched only once,
 then checked against each list — no duplicate requests:
 
 ```powershell
-python seraphim-weekend-scraper_0.2.py --stores-file "Stores.txt" --output "matches.json" --stores-file "Stores - fatpack.txt" --output "matches - fatpack.json" --stores-file "Stores - build.txt" --output "matches - build.json"
+python seraphim-weekend-scraper.py --stores-file "Stores.txt" --output "matches.json" --stores-file "Stores - fatpack.txt" --output "matches - fatpack.json" --stores-file "Stores - build.txt" --output "matches - build.json"
 ```
 
 Then build one page with a tab per list:
@@ -159,7 +159,7 @@ python generate_site.py --input matches.json --output docs/index.html --title "W
 Scrape and rebuild:
 
 ```powershell
-python seraphim-weekend-scraper_0.2.py --stores-file "Stores.txt" --output "matches.json" --stores-file "Stores - fatpack.txt" --output "matches - fatpack.json" --stores-file "Stores - build.txt" --output "matches - build.json"
+python seraphim-weekend-scraper.py --stores-file "Stores.txt" --output "matches.json" --stores-file "Stores - fatpack.txt" --output "matches - fatpack.json" --stores-file "Stores - build.txt" --output "matches - build.json"
 ```
 
 ```powershell
