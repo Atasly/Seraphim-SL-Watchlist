@@ -1,0 +1,58 @@
+# One store name per line. Case doesn't matter, lines starting with # are ignored.
+
+# A
+
+# B
+Backbone
+
+# C
+Canarun
+
+# D
+
+# E
+
+# F
+
+# G
+
+# H
+
+# I
+indecent affairs
+
+# K
+kunst
+kuroi
+kraftwork
+
+# L
+
+# M
+Malafemmina
+
+# N
+
+# O
+
+# P
+
+# R
+
+# S
+
+# T
+trompe loeil
+
+# U
+
+# V
+
+# W
+
+# X
+
+# Y
+
+# Z
+Zmiya

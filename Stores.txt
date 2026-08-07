@@ -1,0 +1,148 @@
+# One store name per line. Case doesn't matter, lines starting with # are ignored.
+
+# A
+Altair
+Amadeus
+Arltos
+Asteroidbox
+Apricot Paws
+Azaran
+Azoury
+antaya
+arkhive
+unyu
+
+# B
+Badwolf
+Belle Epoque
+bonbon
+Beautiful Dirty Rich
+*B.D.R.*
+B.D.R.
+Beusy
+
+# C
+Cruel
+Chandra
+Caboodle
+Crybunbun
+Cubic Cherry
+Celesticat
+Cureless
+Cyberia
+Contraption
+cursery
+chain
+
+# D
+dark agony
+Daodao
+Duckie
+
+# E
+emotional circus
+Eliavah
+Eternus
+
+# F
+Freya
+Facs
+Friday
+
+# G
+graal
+goreglam
+gorsimi
+
+# H
+Huntt
+hazel
+hollow
+
+# I
+Insanya
+
+# K
+Kaithleen
+Killjoy
+Kururu
+kuni
+
+# L
+Litten
+Luas
+
+# M
+milkbath
+Minuit
+Moon amore
+monso
+moon
+muse
+mudskin
+martyr
+mercurial
+mewsery
+
+# N
+Nyaru
+normandy
+nefekalum
+
+# O
+oushk
+opale
+
+# P
+Petrichor
+Puddles
+polarbunny
+
+# R
+Rotten
+Rosier
+
+# S
+Sintiklia
+Stealthic
+Stoic
+Studio exposure
+# TODO Stun poses or stun ? check
+Stun
+Sulfur
+skittish
+sour
+suravi
+
+# T
+tardfish
+# TODO the forge or forge ? check
+The forge
+top1salon
+tentacio
+truth
+tres beau
+
+# U
+Una
+unicult
+usagi society
+
+# V
+Valhalla
+Vaki kvaki
+violent seduction
+violetility
+vae victis
+verboten
+vermillion
+
+# W
+wraith
+wretch
+wasabi
+
+# X
+Xiuxiu
+
+# Y

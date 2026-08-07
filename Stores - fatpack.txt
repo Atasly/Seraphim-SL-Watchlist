@@ -1,0 +1,74 @@
+# One store name per line. Case doesn't matter, lines starting with # are ignored.
+
+# A
+Absence
+axia
+
+# B
+bipolar
+Bonnie
+
+# C
+
+# D
+Daodao
+Ducky
+
+# E
+Effervescence
+
+# F
+
+# G
+
+# H
+hysteria
+HimeDream
+
+# I
+
+# K
+kiru
+
+# L
+lunafell
+
+# M
+moon rabbit
+moon elixir
+M.mie
+
+# N
+
+# O
+oracle
+
+# P
+
+# R
+rebis
+renie
+Red Blossom
+
+# S
+suicidal unborn
+seka
+skellybones
+
+# T
+theROOM
+toksik
+
+# U
+
+# V
+valentine
+villena
+violent seduction
+
+# W
+
+# X
+
+# Y
+Yaya
