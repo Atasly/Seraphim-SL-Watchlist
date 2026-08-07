@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Seraphim SL Watchlist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #e8e8e6;
+  --muted: #9a9a97;
+  --faint: #6b6b68;
+  --paper: #121213;
+  --panel: #1b1b1d;
+  --card: #1a1a1c;
+  --line: #2a2a2d;
+  --accent: #c084fc;
+  --slurl-blue: #38bdf8;
+  --pin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230a0a0b'%3E%3Cpath d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z'/%3E%3C/svg%3E");
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.45;
+}
+a { color: var(--ink); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.site-header {
+  background: #0a0a0b;
+  color: #fff;
+  border-bottom: 3px solid var(--accent);
+}
+.site-header .wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px 20px;
+}
+.site-header h1 {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.site-header h1 a { color: #fff; }
+.site-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+
+.summary {
+  padding: 12px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tabs {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 14px 20px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tab-btn {
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  padding: 9px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  font-family: inherit;
+}
+.tab-btn:hover { color: var(--ink); }
+.tab-btn.active {
+  background: var(--card);
+  color: var(--ink);
+  border-color: var(--accent);
+}
+.tab-btn.right { margin-left: auto; }
+.tab-panel { display: none; }
+.tab-panel[data-active] { display: block; }
+.tab-count {
+  padding: 12px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stores-title {
+  margin: 18px 0 0;
+  font-family: "Playfair Display", serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.store-directory {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 0 26px;
+}
+@media (max-width: 1100px) {
+  .store-directory { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 800px) {
+  .store-directory { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .store-directory { grid-template-columns: 1fr; }
+}
+.store-set-label {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.store-group {
+  border: 1px solid var(--line);
+  background: var(--card);
+  padding: 10px 14px 12px;
+  min-width: 0;
+}
+.store-group-letter {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--accent);
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 6px;
+}
+.store-group-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+.store-group-list li {
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+.store-items {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 0 26px;
+}
+@media (max-width: 1100px) {
+  .store-items { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 800px) {
+  .store-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .store-items { grid-template-columns: 1fr; }
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+  border-bottom: 1px solid var(--line);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.card img.loaded { opacity: 1; }
+.card-body {
+  padding: 9px 11px;
+  min-width: 0;
+}
+.card-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 3px;
+  overflow-wrap: anywhere;
+}
+.card-links {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 1px 0;
+  overflow-wrap: anywhere;
+}
+.card-links a { color: var(--accent); }
+.card-caption {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink);
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
+  overflow-wrap: anywhere;
+}
+.card-caption a { color: var(--accent); }
+.card-caption a[href*="maps.secondlife.com"],
+.card-links a[href*="maps.secondlife.com"] {
+  display: inline-block;
+  margin: 1px 2px 1px 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--slurl-blue);
+  color: #0a0a0b;
+  font-weight: 700;
+}
+.card-caption a[href*="maps.secondlife.com"]::before,
+.card-links a[href*="maps.secondlife.com"]::before {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 5px;
+  vertical-align: -2px;
+  background: var(--pin-icon) no-repeat center / contain;
+}
+.card-caption a[href*="maps.secondlife.com"]:hover,
+.card-links a[href*="maps.secondlife.com"]:hover {
+  background: #7dd3fc;
+  text-decoration: none;
+}
+
+.empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* Fullscreen lightbox */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.94);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.lightbox[hidden] { display: none; }
+.lightbox img {
+  max-width: 92vw;
+  max-height: 72vh;
+  object-fit: contain;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.9);
+  cursor: zoom-out;
+  transition: opacity 0.2s ease;
+}
+.lightbox.loading img { opacity: 0.25; }
+.lb-spin {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border: 4px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: lb-spin 0.8s linear infinite;
+  z-index: 1002;
+}
+.lb-spin[hidden] { display: none; }
+@keyframes lb-spin {
+  to { transform: rotate(360deg); }
+}
+.lb-visit {
+  display: inline-block;
+  padding: 10px 26px;
+  border-radius: 999px;
+  background: var(--slurl-blue);
+  color: #0a0a0b;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.4);
+}
+.lb-visit::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 7px;
+  vertical-align: -2px;
+  background: var(--pin-icon) no-repeat center / contain;
+}
+.lb-visit:hover {
+  background: #7dd3fc;
+  color: #0a0a0b;
+  text-decoration: none;
+}
+.lb-visit[hidden] { display: none; }
+.lb-info {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  background: rgba(10, 10, 11, 0.8);
+  color: #e8e8e6;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  max-width: 80vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lb-btn {
+  position: fixed;
+  z-index: 1001;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(20, 20, 22, 0.85);
+  color: #e8e8e6;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.lb-btn:hover { background: var(--accent); color: #0a0a0b; }
+.lb-close {
+  top: 20px;
+  right: 22px;
+  font-size: 28px;
+}
+.lb-prev { left: 22px; top: 50%; transform: translateY(-50%); }
+.lb-next { right: 22px; top: 50%; transform: translateY(-50%); }
+@media (max-width: 640px) {
+  .lb-prev, .lb-next { top: auto; bottom: 26px; transform: none; }
+  .lb-info { display: none; }
+}
+.site-footer {
+  background: #0a0a0b;
+  color: var(--faint);
+  padding: 16px 20px;
+  font-size: 12px;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <h1><a href="https://github.com/Atasly/Seraphim-SL-Watchlist">Seraphim SL Watchlist</a></h1>
+    <p>Second Life weekend sales &mdash; Curated and Compiled</p>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab-btn active" data-tab="0">single</button>
+  <button class="tab-btn" data-tab="1">fatpack</button>
+  <button class="tab-btn" data-tab="2">build</button>
+  <button class="tab-btn right" data-tab="3">Watchlist</button>
+</nav>
+
+<div class="summary wrap">
+  3 match(es) across 3 store(s)
+  &middot; sorted by store name
+  &middot; generated August 07, 2026, 17:50
+</div>
+
+<main class="wrap"><div class="tab-panel" id="tab-0" data-active=""><div class="tab-count">2 match(es) across 2 store(s)</div><div class="store-items">
+    <div class="card">
+      <a href="https://www.seraphimsl.com/wp-content/uploads/2026/08/Celesticat-99S080826.jpg" target="_blank" rel="noopener" class="lb-link" data-tab="0" data-index="0"><img src="https://www.seraphimsl.com/wp-content/uploads/2026/08/Celesticat-99S080826-300x225.jpg" alt="Celesticat" loading="lazy"></a>
+      <div class="card-body">
+        <p class="card-title">Celesticat</p>
+        <div class="card-links"><a href="https://www.seraphimsl.com/2026/08/07/the-best-time-of-the-week-is-99-sale-day/" target="_blank" rel="noopener">The Best Time Of The Week Is 99.Sale Day!</a></div>
+        <div class="card-caption"><strong><a href="https://maps.secondlife.com/secondlife/Oni/161/94/3" target="_blank">Visit store</a></strong></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <a href="https://www.seraphimsl.com/wp-content/uploads/2026/08/Vaki-Kvaki_001.jpg" target="_blank" rel="noopener" class="lb-link" data-tab="0" data-index="1"><img src="https://www.seraphimsl.com/wp-content/uploads/2026/08/Vaki-Kvaki_001-300x225.jpg" alt="Vaki Kvaki" loading="lazy"></a>
+      <div class="card-body">
+        <p class="card-title">Vaki Kvaki</p>
+        <div class="card-links"><a href="https://www.seraphimsl.com/2026/08/07/the-best-time-of-the-week-is-99-sale-day/" target="_blank" rel="noopener">The Best Time Of The Week Is 99.Sale Day!</a></div>
+        <div class="card-caption"><strong><a href="https://maps.secondlife.com/secondlife/Wildflower%20Mountain/222/58/22" target="_blank">Visit store</a></strong></div>
+      </div>
+    </div></div></div><div class="tab-panel" id="tab-1"><div class="tab-count">0 match(es) across 0 store(s)</div><div class="empty"><p>No matches yet. Run the scraper and regenerate.</p></div></div><div class="tab-panel" id="tab-2"><div class="tab-count">1 match(es) across 1 store(s)</div><div class="store-items">
+    <div class="card">
+      <a href="https://www.seraphimsl.com/wp-content/uploads/2026/08/Canarun-99S080726.jpg" target="_blank" rel="noopener" class="lb-link" data-tab="2" data-index="0"><img src="https://www.seraphimsl.com/wp-content/uploads/2026/08/Canarun-99S080726-300x225.jpg" alt="Canarun" loading="lazy"></a>
+      <div class="card-body">
+        <p class="card-title">Canarun</p>
+        <div class="card-links"><a href="https://www.seraphimsl.com/2026/08/07/the-best-time-of-the-week-is-99-sale-day/" target="_blank" rel="noopener">The Best Time Of The Week Is 99.Sale Day!</a></div>
+        <div class="card-caption"><strong><a href="http://maps.secondlife.com/secondlife/Canarun/241/130/24" target="_blank">Visit store</a></strong></div>
+      </div>
+    </div></div></div><div class="tab-panel" id="tab-3">
+  <h2 class="stores-title">Stores on the watchlist</h2>
+  <div class="tab-count">135 store(s) on your watchlist</div>
+  <div class="store-directory">
+    <h3 class="store-set-label">Stores</h3>
+    <section class="store-group">
+      <h4 class="store-group-letter">A</h4>
+      <ul class="store-group-list">
+        <li>Altair</li>
+        <li>Amadeus</li>
+        <li>Arltos</li>
+        <li>Asteroidbox</li>
+        <li>Apricot Paws</li>
+        <li>Azaran</li>
+        <li>Azoury</li>
+        <li>antaya</li>
+        <li>arkhive</li>
+        <li>unyu</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">B</h4>
+      <ul class="store-group-list">
+        <li>Badwolf</li>
+        <li>Belle Epoque</li>
+        <li>bonbon</li>
+        <li>Beautiful Dirty Rich</li>
+        <li>*B.D.R.*</li>
+        <li>B.D.R.</li>
+        <li>Beusy</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">C</h4>
+      <ul class="store-group-list">
+        <li>Cruel</li>
+        <li>Chandra</li>
+        <li>Caboodle</li>
+        <li>Crybunbun</li>
+        <li>Cubic Cherry</li>
+        <li>Celesticat</li>
+        <li>Cureless</li>
+        <li>Cyberia</li>
+        <li>Contraption</li>
+        <li>cursery</li>
+        <li>chain</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">D</h4>
+      <ul class="store-group-list">
+        <li>dark agony</li>
+        <li>Daodao</li>
+        <li>Duckie</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">E</h4>
+      <ul class="store-group-list">
+        <li>emotional circus</li>
+        <li>Eliavah</li>
+        <li>Eternus</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">F</h4>
+      <ul class="store-group-list">
+        <li>Freya</li>
+        <li>Facs</li>
+        <li>Friday</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">G</h4>
+      <ul class="store-group-list">
+        <li>graal</li>
+        <li>goreglam</li>
+        <li>gorsimi</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">H</h4>
+      <ul class="store-group-list">
+        <li>Huntt</li>
+        <li>hazel</li>
+        <li>hollow</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">I</h4>
+      <ul class="store-group-list">
+        <li>Insanya</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">K</h4>
+      <ul class="store-group-list">
+        <li>Kaithleen</li>
+        <li>Killjoy</li>
+        <li>Kururu</li>
+        <li>kuni</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">L</h4>
+      <ul class="store-group-list">
+        <li>Litten</li>
+        <li>Luas</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">M</h4>
+      <ul class="store-group-list">
+        <li>milkbath</li>
+        <li>Minuit</li>
+        <li>Moon amore</li>
+        <li>monso</li>
+        <li>moon</li>
+        <li>muse</li>
+        <li>mudskin</li>
+        <li>martyr</li>
+        <li>mercurial</li>
+        <li>mewsery</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">N</h4>
+      <ul class="store-group-list">
+        <li>Nyaru</li>
+        <li>normandy</li>
+        <li>nefekalum</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">O</h4>
+      <ul class="store-group-list">
+        <li>oushk</li>
+        <li>opale</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">P</h4>
+      <ul class="store-group-list">
+        <li>Petrichor</li>
+        <li>Puddles</li>
+        <li>polarbunny</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">R</h4>
+      <ul class="store-group-list">
+        <li>Rotten</li>
+        <li>Rosier</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">S</h4>
+      <ul class="store-group-list">
+        <li>Sintiklia</li>
+        <li>Stealthic</li>
+        <li>Stoic</li>
+        <li>Studio exposure</li>
+        <li>Stun</li>
+        <li>Sulfur</li>
+        <li>skittish</li>
+        <li>sour</li>
+        <li>suravi</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">T</h4>
+      <ul class="store-group-list">
+        <li>tardfish</li>
+        <li>The forge</li>
+        <li>top1salon</li>
+        <li>tentacio</li>
+        <li>truth</li>
+        <li>tres beau</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">U</h4>
+      <ul class="store-group-list">
+        <li>Una</li>
+        <li>unicult</li>
+        <li>usagi society</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">V</h4>
+      <ul class="store-group-list">
+        <li>Valhalla</li>
+        <li>Vaki kvaki</li>
+        <li>violent seduction</li>
+        <li>violetility</li>
+        <li>vae victis</li>
+        <li>verboten</li>
+        <li>vermillion</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">W</h4>
+      <ul class="store-group-list">
+        <li>wraith</li>
+        <li>wretch</li>
+        <li>wasabi</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">X</h4>
+      <ul class="store-group-list">
+        <li>Xiuxiu</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">Y</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+<h3 class="store-set-label">Stores - fatpack</h3>
+    <section class="store-group">
+      <h4 class="store-group-letter">A</h4>
+      <ul class="store-group-list">
+        <li>Absence</li>
+        <li>axia</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">B</h4>
+      <ul class="store-group-list">
+        <li>bipolar</li>
+        <li>Bonnie</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">C</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">D</h4>
+      <ul class="store-group-list">
+        <li>Daodao</li>
+        <li>Ducky</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">E</h4>
+      <ul class="store-group-list">
+        <li>Effervescence</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">F</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">G</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">H</h4>
+      <ul class="store-group-list">
+        <li>hysteria</li>
+        <li>HimeDream</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">I</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">K</h4>
+      <ul class="store-group-list">
+        <li>kiru</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">L</h4>
+      <ul class="store-group-list">
+        <li>lunafell</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">M</h4>
+      <ul class="store-group-list">
+        <li>moon rabbit</li>
+        <li>moon elixir</li>
+        <li>M.mie</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">N</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">O</h4>
+      <ul class="store-group-list">
+        <li>oracle</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">P</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">R</h4>
+      <ul class="store-group-list">
+        <li>rebis</li>
+        <li>renie</li>
+        <li>Red Blossom</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">S</h4>
+      <ul class="store-group-list">
+        <li>suicidal unborn</li>
+        <li>seka</li>
+        <li>skellybones</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">T</h4>
+      <ul class="store-group-list">
+        <li>theROOM</li>
+        <li>toksik</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">U</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">V</h4>
+      <ul class="store-group-list">
+        <li>valentine</li>
+        <li>villena</li>
+        <li>violent seduction</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">W</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">X</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">Y</h4>
+      <ul class="store-group-list">
+        <li>Yaya</li>
+      </ul>
+    </section>
+<h3 class="store-set-label">Stores - build</h3>
+    <section class="store-group">
+      <h4 class="store-group-letter">A</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">B</h4>
+      <ul class="store-group-list">
+        <li>Backbone</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">C</h4>
+      <ul class="store-group-list">
+        <li>Canarun</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">D</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">E</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">F</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">G</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">H</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">I</h4>
+      <ul class="store-group-list">
+        <li>indecent affairs</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">K</h4>
+      <ul class="store-group-list">
+        <li>kunst</li>
+        <li>kuroi</li>
+        <li>kraftwork</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">L</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">M</h4>
+      <ul class="store-group-list">
+        <li>Malafemmina</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">N</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">O</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">P</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">R</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">S</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">T</h4>
+      <ul class="store-group-list">
+        <li>trompe loeil</li>
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">U</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">V</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">W</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">X</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">Y</h4>
+      <ul class="store-group-list">
+
+      </ul>
+    </section>
+    <section class="store-group">
+      <h4 class="store-group-letter">Z</h4>
+      <ul class="store-group-list">
+        <li>Zmiya</li>
+      </ul>
+    </section>
+  </div>
+</div></main>
+
+<footer class="site-footer">
+  Generated by <a href="https://github.com/Atasly/Seraphim-SL-Watchlist">Seraphim SL Watchlist</a>
+</footer>
+
+<div id="lb" class="lightbox" hidden>
+  <button id="lb-close" class="lb-btn lb-close" aria-label="Close" title="Close">&times;</button>
+  <button id="lb-prev" class="lb-btn lb-prev" aria-label="Previous" title="Previous">&lsaquo;</button>
+  <button id="lb-next" class="lb-btn lb-next" aria-label="Next" title="Next">&rsaquo;</button>
+  <img id="lb-img" src="" alt="">
+  <div id="lb-spin" class="lb-spin" hidden></div>
+  <a id="lb-visit" class="lb-visit" href="#" target="_blank" rel="noopener" hidden>Visit store</a>
+  <div id="lb-info" class="lb-info"></div>
+</div>
+
+<script>
+const TABS = [{"label": "single", "items": [{"img": "https://www.seraphimsl.com/wp-content/uploads/2026/08/Celesticat-99S080826.jpg", "thumb": "https://www.seraphimsl.com/wp-content/uploads/2026/08/Celesticat-99S080826-300x225.jpg", "store": "Celesticat", "event_url": "https://www.seraphimsl.com/2026/08/07/the-best-time-of-the-week-is-99-sale-day/", "event_title": "The Best Time Of The Week Is 99.Sale Day!", "slurl": "https://maps.secondlife.com/secondlife/Oni/161/94/3"}, {"img": "https://www.seraphimsl.com/wp-content/uploads/2026/08/Vaki-Kvaki_001.jpg", "thumb": "https://www.seraphimsl.com/wp-content/uploads/2026/08/Vaki-Kvaki_001-300x225.jpg", "store": "Vaki Kvaki", "event_url": "https://www.seraphimsl.com/2026/08/07/the-best-time-of-the-week-is-99-sale-day/", "event_title": "The Best Time Of The Week Is 99.Sale Day!", "slurl": "https://maps.secondlife.com/secondlife/Wildflower%20Mountain/222/58/22"}]}, {"label": "fatpack", "items": []}, {"label": "build", "items": [{"img": "https://www.seraphimsl.com/wp-content/uploads/2026/08/Canarun-99S080726.jpg", "thumb": "https://www.seraphimsl.com/wp-content/uploads/2026/08/Canarun-99S080726-300x225.jpg", "store": "Canarun", "event_url": "https://www.seraphimsl.com/2026/08/07/the-best-time-of-the-week-is-99-sale-day/", "event_title": "The Best Time Of The Week Is 99.Sale Day!", "slurl": "http://maps.secondlife.com/secondlife/Canarun/241/130/24"}]}];
+(function () {
+  const links = Array.from(document.querySelectorAll('.lb-link'));
+  const lb = document.getElementById('lb');
+  const img = document.getElementById('lb-img');
+  const info = document.getElementById('lb-info');
+  const vbtn = document.getElementById('lb-visit');
+  const spin = document.getElementById('lb-spin');
+  let curTab = 0;
+  let curIdx = -1;
+  let loadSeq = 0;
+
+  function items(t) { return TABS[t] ? TABS[t].items : []; }
+
+  function show(tab, i) {
+    const list = items(tab);
+    if (!list.length) return;
+    curTab = tab;
+    curIdx = (i + list.length) % list.length;
+    const it = list[curIdx];
+    loadSeq += 1;
+    spin.hidden = false;
+    lb.classList.add('loading');
+    img.src = it.img;
+    img.dataset.seq = loadSeq;
+    img.alt = it.store;
+    info.textContent = it.store + (it.event_title ? ' \u2014 ' + it.event_title : '');
+    if (it.slurl) {
+      vbtn.href = it.slurl;
+      vbtn.hidden = false;
+    } else {
+      vbtn.href = '#';
+      vbtn.hidden = true;
+    }
+    lb.hidden = false;
+    document.body.style.overflow = 'hidden';
+    if (img.complete && img.naturalWidth) {
+      spin.hidden = true;
+      lb.classList.remove('loading');
+    }
+  }
+  img.addEventListener('load', function () {
+    if (img.dataset.seq == loadSeq) {
+      spin.hidden = true;
+      lb.classList.remove('loading');
+    }
+  });
+  img.addEventListener('error', function () {
+    if (img.dataset.seq == loadSeq) {
+      spin.hidden = true;
+      lb.classList.remove('loading');
+    }
+  });
+  function close() {
+    lb.hidden = true;
+    img.src = '';
+    spin.hidden = true;
+    lb.classList.remove('loading');
+    document.body.style.overflow = '';
+  }
+  function nav(d) { show(curTab, curIdx + d); }
+
+  function selectTab(t) {
+    document.querySelectorAll('.tab-panel').forEach(function (p, i) {
+      if (i === t) p.setAttribute('data-active', '');
+      else p.removeAttribute('data-active');
+    });
+    document.querySelectorAll('.tab-btn').forEach(function (b) {
+      b.classList.toggle('active', Number(b.dataset.tab) === t);
+    });
+  }
+
+  document.querySelectorAll('.card img').forEach(function (im) {
+    if (im.complete && im.naturalWidth) im.classList.add('loaded');
+    else {
+      im.addEventListener('load', function () { im.classList.add('loaded'); });
+      im.addEventListener('error', function () { im.classList.add('loaded'); });
+    }
+  });
+
+  links.forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      show(Number(a.dataset.tab) || 0, Number(a.dataset.index) || 0);
+    });
+  });
+  document.querySelectorAll('.tab-btn').forEach(function (b) {
+    b.addEventListener('click', function () { selectTab(Number(b.dataset.tab) || 0); });
+  });
+  document.getElementById('lb-close').addEventListener('click', close);
+  document.getElementById('lb-prev').addEventListener('click', function () { nav(-1); });
+  document.getElementById('lb-next').addEventListener('click', function () { nav(1); });
+  lb.addEventListener('click', function (e) {
+    if (e.target === lb) close();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (lb.hidden) return;
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft') nav(-1);
+    else if (e.key === 'ArrowRight') nav(1);
+  });
+
+  selectTab(0);
+})();
+</script>
+</body>
+</html>
