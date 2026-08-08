@@ -2,7 +2,7 @@
 
 Scrapes Second Life weekend-sale galleries (Seraphim, AltSL, Facebook albums, and
 other external galleries) for stores on some watchlists, saves the matches to
-`matches.json`, and renders them into a static, dark, magazine-style website in
+`matches.json`, and renders them into a static, dark, purple-accented website in
 `docs/` that can be hosted on GitHub Pages.
 
 ## Note of intent
@@ -131,8 +131,8 @@ python seraphim-weekend-scraper.py --source evoshop --listing-url https://home.e
 python generate_site.py
 ```
 
-This reads `matches.json` and writes `docs/index.html` (plus a copy of the data
-at `docs/matches.json`).
+This reads `matches.json` and writes `docs/index.html`. By default it does not
+copy the data file; pass `--copy-data` to also write a copy to `docs/matches.json`.
 
 ### Multiple watchlists (tabs)
 

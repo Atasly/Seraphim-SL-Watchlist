@@ -4,13 +4,14 @@
 Altair
 Amadeus
 Arltos
+Arltos Afterlife
 Asteroidbox
 Apricot Paws
 Azaran
 Azoury
 Antaya
 Arkhive
-Unyu
+Ascent
 
 # B
 Badwolf
@@ -38,6 +39,7 @@ Chain
 Dark Agony
 Daodao
 Duckie
+Darkmoon
 
 # E
 Emotional Circus
@@ -73,6 +75,7 @@ kuni
 # L
 Litten
 Luas
+Lamz
 
 # M
 Milkbath
@@ -131,6 +134,7 @@ Tres Beau
 Una
 Unicult
 Usagi Society
+Unyu
 
 # V
 Valhalla

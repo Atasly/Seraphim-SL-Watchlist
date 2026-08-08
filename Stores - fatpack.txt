@@ -3,6 +3,7 @@
 # A
 Absence
 Axia
+Aurun
 
 # B
 Bipolar
@@ -24,6 +25,7 @@ Effervescence
 # H
 Hysteria
 HimeDream
+Hime*Dream
 
 # I
 

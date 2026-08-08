@@ -13,13 +13,13 @@ served straight from GitHub Pages.
 Folder layout (ready for GitHub Pages served from /docs):
     docs/
         index.html      <- generated page (commit this)
-        matches.json    <- copy of the data the page was built from
 
 Usage
 -----
     python generate_site.py                        # docs/index.html from matches.json
     python generate_site.py --input out.json \
         --output docs/index.html --title "Sales"
+    python generate_site.py --copy-data            # also write docs/matches.json
 """
 
 from __future__ import annotations
@@ -37,63 +37,101 @@ from typing import Dict, List
 DEFAULT_INPUT = Path(__file__).parent / "matches.json"
 DEFAULT_OUTPUT = Path(__file__).parent / "docs" / "index.html"
 
-STYLE = """
-:root {
-  --ink: #e8e8e6;
-  --muted: #9a9a97;
-  --faint: #6b6b68;
-  --paper: #121213;
-  --panel: #1b1b1d;
-  --card: #1a1a1c;
-  --line: #2a2a2d;
+STYLE = """:root {
+  --bg: #0a0a0f;
+  --panel: #12121c;
+  --panel2: #181826;
+  --panel3: #1f1f30;
+  --border: rgba(255, 255, 255, .07);
+  --border-strong: rgba(255, 255, 255, .14);
+  --text: #eae8f2;
+  --muted: #8b88a2;
+  --faint: #5b5870;
   --accent: #c084fc;
-  --slurl-blue: #38bdf8;
-  --pin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230a0a0b'%3E%3Cpath d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z'/%3E%3C/svg%3E");
+  --accent-dim: rgba(192, 132, 252, .14);
+  --accent-glow: rgba(192, 132, 252, .35);
+  --pin: #8a5fd8;
+  --pin-hover: #9a70e8;
+  --pin-dim: rgba(138, 95, 216, .35);
+  --radius: 14px;
+  --radius-sm: 9px;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --pin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z'/%3E%3C/svg%3E");
 }
 * { box-sizing: border-box; }
+html { scrollbar-gutter: stable; }
+html, body { margin: 0; padding: 0; }
 body {
-  margin: 0;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  color: var(--ink);
-  background: var(--paper);
+  background:
+    radial-gradient(1100px 520px at 85% -8%, rgba(192, 132, 252, .10), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(192, 132, 252, .05), transparent 55%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
   line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
-a { color: var(--ink); text-decoration: none; }
+::selection { background: var(--accent-dim); color: var(--accent); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--panel3); border-radius: 20px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-glow); }
+a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 .site-header {
-  background: #0a0a0b;
-  color: #fff;
-  border-bottom: 3px solid var(--accent);
+  background: rgba(12, 12, 19, .78);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
 }
 .site-header .wrap {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 18px 20px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.brand-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--accent);
+  box-shadow: 0 0 0 5px var(--accent-dim), 0 0 18px var(--accent);
 }
 .site-header h1 {
   margin: 0;
-  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-  font-size: 30px;
-  font-weight: 600;
-  letter-spacing: 1px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: .6px;
+  line-height: 1.2;
   text-transform: uppercase;
 }
-.site-header h1 a { color: #fff; }
-.site-header p {
-  margin: 4px 0 0;
+.site-header h1 a { color: var(--text); }
+.brand-sub {
+  margin: 2px 0 0;
+  font-size: 11px;
   color: var(--muted);
-  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
 }
 
 .wrap { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
 
 .summary {
-  padding: 12px 20px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--line);
-  font-size: 13px;
+  display: flex;
+  justify-content: flex-start;
+  padding: 16px 20px 0;
+}
+.summary .pill {
+  font-size: 12.5px;
   color: var(--muted);
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 16px;
 }
 
 .tabs {
@@ -103,48 +141,54 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  border-bottom: 1px solid var(--border);
 }
 .tab-btn {
+  padding: 8px 18px;
+  margin-bottom: -1px;
   background: var(--panel);
-  color: var(--muted);
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-bottom: none;
-  padding: 9px 22px;
-  font-size: 14px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 13.5px;
+  font-weight: 600;
   cursor: pointer;
-  border-radius: 8px 8px 0 0;
-  font-family: inherit;
+  transition: all .15s;
 }
-.tab-btn:hover { color: var(--ink); }
+.tab-btn:hover { color: var(--text); border-color: var(--border-strong); }
 .tab-btn.active {
-  background: var(--card);
-  color: var(--ink);
-  border-color: var(--accent);
+  background: var(--panel3);
+  color: var(--accent);
+  border-color: var(--border-strong);
+  border-bottom: 2px solid var(--accent);
 }
 .tab-btn.right { margin-left: auto; }
 .tab-panel { display: none; }
-.tab-panel[data-active] { display: block; }
+.tab-panel[data-active] { display: block; animation: fade .2s ease; }
+@keyframes fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
 .tab-count {
-  padding: 12px 0 0;
-  font-size: 12px;
+  padding: 14px 0 4px;
+  font-size: 12.5px;
   color: var(--muted);
 }
 
 .stores-title {
-  margin: 18px 0 0;
-  font-family: "Playfair Display", serif;
+  margin: 22px 0 2px;
   font-size: 22px;
-  font-weight: 600;
-  color: var(--ink);
+  font-weight: 800;
+  letter-spacing: .3px;
+  color: var(--text);
 }
 .store-directory {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  padding: 14px 0 26px;
+  gap: 14px;
+  padding: 16px 0 26px;
 }
 @media (max-width: 1100px) {
   .store-directory { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -157,26 +201,31 @@ a:hover { text-decoration: underline; }
 }
 .store-set-label {
   grid-column: 1 / -1;
-  margin: 4px 0 0;
-  font-size: 15px;
+  margin: 8px 0 0;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
   color: var(--muted);
 }
 .store-group {
-  border: 1px solid var(--line);
-  background: var(--card);
-  padding: 10px 14px 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 12px 14px 14px;
   min-width: 0;
+  transition: border-color .15s;
 }
+.store-group:hover { border-color: var(--border-strong); }
 .store-group-letter {
-  margin: 0 0 8px;
-  font-size: 12px;
+  margin: 0 0 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.4px;
   color: var(--accent);
-  border-bottom: 1px dashed var(--line);
-  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--border-strong);
+  padding-bottom: 8px;
 }
 .store-group-list {
   list-style: none;
@@ -186,13 +235,15 @@ a:hover { text-decoration: underline; }
 }
 .store-group-list li {
   font-size: 13px;
-  padding: 2px 0;
+  padding: 2.5px 0;
+  color: var(--text);
+  opacity: .9;
 }
 
 .store-items {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
   padding: 18px 0 26px;
 }
 @media (max-width: 1100px) {
@@ -208,68 +259,113 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border: 1px solid var(--line);
-  background: var(--card);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: transform .16s ease, border-color .16s, box-shadow .16s;
+}
+.card:hover {
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 34px rgba(192, 132, 252, .13);
 }
 .card img {
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
   display: block;
-  border-bottom: 1px solid var(--line);
+  transition: transform .3s ease, opacity .3s;
   opacity: 0;
-  transition: opacity 0.3s ease;
 }
 .card img.loaded { opacity: 1; }
+.card:hover img { transform: scale(1.06); }
 .card-body {
-  padding: 9px 11px;
+  padding: 11px 12px 12px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
 }
 .card-title {
-  font-size: 14px;
-  font-weight: 700;
-  margin: 0 0 3px;
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.3;
+  margin: 0;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 35px;
 }
-.card-links {
+.card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: auto;
+}
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--panel2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.badge a { color: inherit; }
+.badge a:hover { color: var(--accent); text-decoration: none; }
+.badge.slurl {
+  background: var(--pin);
+  color: #fff;
+  border-color: transparent;
+}
+.badge.slurl::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  background: var(--pin-icon) no-repeat center / contain;
+}
+.badge.slurl a { color: #fff; }
+.badge.slurl a:hover { text-decoration: underline; }
+.card-caption {
   font-size: 12px;
   color: var(--muted);
-  margin: 1px 0;
-  overflow-wrap: anywhere;
-}
-.card-links a { color: var(--accent); }
-.card-caption {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--ink);
-  border-top: 1px dashed var(--line);
-  padding-top: 6px;
   overflow-wrap: anywhere;
 }
 .card-caption a { color: var(--accent); }
-.card-caption a[href*="maps.secondlife.com"],
-.card-links a[href*="maps.secondlife.com"] {
+.card-caption a[href*="maps.secondlife.com"] {
   display: inline-block;
   margin: 1px 2px 1px 0;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--slurl-blue);
-  color: #0a0a0b;
-  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: var(--pin);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .2px;
 }
-.card-caption a[href*="maps.secondlife.com"]::before,
-.card-links a[href*="maps.secondlife.com"]::before {
+.card-caption a[href*="maps.secondlife.com"]::before {
   content: "";
   display: inline-block;
-  width: 11px;
-  height: 11px;
-  margin-right: 5px;
-  vertical-align: -2px;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  vertical-align: -1px;
   background: var(--pin-icon) no-repeat center / contain;
 }
-.card-caption a[href*="maps.secondlife.com"]:hover,
-.card-links a[href*="maps.secondlife.com"]:hover {
-  background: #7dd3fc;
+.card-caption a[href*="maps.secondlife.com"]:hover {
+  background: var(--pin-hover);
   text-decoration: none;
 }
 
@@ -279,28 +375,37 @@ a:hover { text-decoration: underline; }
   color: var(--muted);
 }
 
-/* Fullscreen lightbox */
+/* Lightbox */
 .lightbox {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.94);
-  display: flex;
-  flex-direction: column;
+  display: none;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  background: rgba(5, 5, 9, .88);
+  backdrop-filter: blur(8px);
 }
-.lightbox[hidden] { display: none; }
+.lightbox:not([hidden]) { display: flex; animation: fade .18s ease; }
+.lightbox figure {
+  margin: 0;
+  max-width: min(900px, 92vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .lightbox img {
-  max-width: 92vw;
-  max-height: 72vh;
+  max-width: 100%;
+  max-height: 78vh;
   object-fit: contain;
-  box-shadow: 0 0 60px rgba(0, 0, 0, 0.9);
-  cursor: zoom-out;
-  transition: opacity 0.2s ease;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 20px 70px rgba(0, 0, 0, .6);
+  background: var(--panel);
+  transition: opacity .2s ease;
 }
-.lightbox.loading img { opacity: 0.25; }
+.lightbox.loading img { opacity: .25; }
 .lb-spin {
   position: fixed;
   top: 50%;
@@ -308,96 +413,97 @@ a:hover { text-decoration: underline; }
   width: 54px;
   height: 54px;
   margin: -27px 0 0 -27px;
-  border: 4px solid rgba(255, 255, 255, 0.15);
+  border: 4px solid rgba(255, 255, 255, .15);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: lb-spin 0.8s linear infinite;
+  animation: lb-spin .8s linear infinite;
   z-index: 1002;
 }
 .lb-spin[hidden] { display: none; }
 @keyframes lb-spin {
   to { transform: rotate(360deg); }
 }
-.lb-visit {
-  display: inline-block;
-  padding: 10px 26px;
-  border-radius: 999px;
-  background: var(--slurl-blue);
-  color: #0a0a0b;
+.lb-cap {
+  color: var(--text);
+  text-align: center;
+  font-size: 13.5px;
+}
+.lb-cap .lb-title {
   font-weight: 700;
   font-size: 15px;
-  letter-spacing: 0.3px;
-  box-shadow: 0 0 24px rgba(56, 189, 248, 0.4);
+  display: block;
+  margin-bottom: 6px;
+}
+.lb-cap .lb-meta {
+  color: var(--muted);
+  font-size: 12.5px;
+  max-width: min(640px, 86vw);
+  margin: 0 auto;
+  overflow-wrap: anywhere;
+}
+.lb-row { margin-top: 10px; }
+.lb-visit {
+  display: inline-block;
+  padding: 7px 18px;
+  border-radius: 20px;
+  background: var(--pin);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: .3px;
+  box-shadow: 0 4px 20px var(--pin-dim);
+}
+.lb-visit:hover {
+  background: var(--pin-hover);
+  color: #fff;
+  text-decoration: none;
 }
 .lb-visit::before {
   content: "";
   display: inline-block;
-  width: 14px;
-  height: 14px;
-  margin-right: 7px;
-  vertical-align: -2px;
+  width: 11px;
+  height: 11px;
+  margin-right: 6px;
+  vertical-align: -1px;
   background: var(--pin-icon) no-repeat center / contain;
-}
-.lb-visit:hover {
-  background: #7dd3fc;
-  color: #0a0a0b;
-  text-decoration: none;
-}
-.lb-visit[hidden] { display: none; }
-.lb-info {
-  position: fixed;
-  left: 50%;
-  bottom: 26px;
-  transform: translateX(-50%);
-  background: rgba(10, 10, 11, 0.8);
-  color: #e8e8e6;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 6px 18px;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  max-width: 80vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .lb-btn {
   position: fixed;
   z-index: 1001;
-  width: 46px;
-  height: 46px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  border: 1px solid var(--line);
-  background: rgba(20, 20, 22, 0.85);
-  color: #e8e8e6;
+  cursor: pointer;
+  background: var(--panel2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
   font-size: 22px;
   line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: all .15s;
 }
-.lb-btn:hover { background: var(--accent); color: #0a0a0b; }
-.lb-close {
-  top: 20px;
-  right: 22px;
-  font-size: 28px;
+.lb-btn:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
 }
-.lb-prev { left: 22px; top: 50%; transform: translateY(-50%); }
-.lb-next { right: 22px; top: 50%; transform: translateY(-50%); }
+.lb-close { top: 20px; right: 22px; font-size: 26px; }
+.lb-prev { left: 20px; top: 50%; transform: translateY(-50%); }
+.lb-next { right: 20px; top: 50%; transform: translateY(-50%); }
 @media (max-width: 640px) {
-  .lb-prev, .lb-next { top: auto; bottom: 26px; transform: none; }
-  .lb-info { display: none; }
+  .lb-prev, .lb-next { top: auto; bottom: 22px; transform: none; }
 }
+
 .site-footer {
-  background: #0a0a0b;
+  border-top: 1px solid var(--border);
   color: var(--faint);
-  padding: 16px 20px;
+  padding: 18px 20px;
   font-size: 12px;
   text-align: center;
 }
+.site-footer a { color: var(--muted); }
+.site-footer a:hover { color: var(--accent); }
 """
 
 
@@ -456,30 +562,28 @@ def render_card(item: dict, index: int, tab: int) -> str:
     event_url = htmlmod.escape(item.get("source_event_url", ""))
     gallery_url = htmlmod.escape(item.get("gallery_url", ""))
 
-    links = []
+    badges = []
     if event_url:
-        links.append(
-            f'<a href="{event_url}" target="_blank" rel="noopener">{event_title or "Event page"}</a>'
+        badges.append(
+            f'<span class="badge"><a href="{event_url}" target="_blank" rel="noopener">{event_title or "Event page"}</a></span>'
         )
     if gallery_url and gallery_url != event_url:
-        links.append(f'<a href="{gallery_url}" target="_blank" rel="noopener">Gallery</a>')
+        badges.append(
+            f'<span class="badge"><a href="{gallery_url}" target="_blank" rel="noopener">Gallery</a></span>'
+        )
 
     caption = sanitize_caption(item.get("caption_html", ""))
     caption_html = f'<div class="card-caption">{caption}</div>' if caption else ""
-
-    links_html = ""
-    if links:
-        joined = '<span class="sep"> &middot; </span>'.join(links)
-        links_html = f'<div class="card-links">{joined}</div>'
+    badges_html = f'<div class="card-badges">{"".join(badges)}</div>' if badges else ""
 
     thumb = htmlmod.escape(item.get("thumb_url") or item.get("image_url", ""))
 
     return f"""
     <div class="card">
-      <a href="{img}" target="_blank" rel="noopener" class="lb-link" data-tab="{tab}" data-index="{index}"><img src="{thumb}" alt="{store}" loading="lazy"></a>
+      <a href="{img}" target="_blank" rel="noopener" class="card-anchor" data-tab="{tab}" data-index="{index}"><img src="{thumb}" alt="{store}" loading="lazy"></a>
       <div class="card-body">
         <p class="card-title">{store}</p>
-        {links_html}
+        {badges_html}
         {caption_html}
       </div>
     </div>"""
@@ -621,26 +725,30 @@ def render_page(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>{htmlmod.escape(title)}</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%23c084fc'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>{STYLE}</style>
 </head>
 <body>
 <header class="site-header">
   <div class="wrap">
-    <h1><a href="https://github.com/Atasly/Seraphim-SL-Watchlist">{htmlmod.escape(title)}</a></h1>
-    <p>Second Life weekend sales &mdash; Curated and Compiled</p>
+    <span class="brand-dot"></span>
+    <div>
+      <h1><a href="https://github.com/Atasly/Seraphim-SL-Watchlist">{htmlmod.escape(title)}</a></h1>
+      <p class="brand-sub">Second Life weekend sales &mdash; Curated and Compiled</p>
+    </div>
   </div>
 </header>
 
 {tabs_html}
 
-<div class="summary wrap">
+<div class="summary wrap"><span class="pill">
   {total} match(es) across {total_stores} store(s)
   &middot; sorted by store name
   &middot; generated {now}
-</div>
+</span></div>
 
 <main class="wrap">{''.join(panels)}</main>
 
@@ -648,30 +756,36 @@ def render_page(
   Generated by <a href="https://github.com/Atasly/Seraphim-SL-Watchlist">Seraphim SL Watchlist</a>
 </footer>
 
-<div id="lb" class="lightbox" hidden>
+<div id="lb" class="lightbox" hidden aria-hidden="true">
   <button id="lb-close" class="lb-btn lb-close" aria-label="Close" title="Close">&times;</button>
-  <button id="lb-prev" class="lb-btn lb-prev" aria-label="Previous" title="Previous">&lsaquo;</button>
-  <button id="lb-next" class="lb-btn lb-next" aria-label="Next" title="Next">&rsaquo;</button>
-  <img id="lb-img" src="" alt="">
+  <button id="lb-prev" class="lb-btn lb-prev" aria-label="Previous" title="Previous">&#8249;</button>
+  <button id="lb-next" class="lb-btn lb-next" aria-label="Next" title="Next">&#8250;</button>
   <div id="lb-spin" class="lb-spin" hidden></div>
-  <a id="lb-visit" class="lb-visit" href="#" target="_blank" rel="noopener" hidden>Visit store</a>
-  <div id="lb-info" class="lb-info"></div>
+  <figure>
+    <img id="lb-img" src="" alt="">
+    <figcaption id="lb-cap" class="lb-cap"></figcaption>
+  </figure>
 </div>
 
 <script>
 const TABS = {tabs_json};
 (function () {{
-  const links = Array.from(document.querySelectorAll('.lb-link'));
+  const links = Array.from(document.querySelectorAll('.card-anchor'));
   const lb = document.getElementById('lb');
   const img = document.getElementById('lb-img');
-  const info = document.getElementById('lb-info');
-  const vbtn = document.getElementById('lb-visit');
+  const cap = document.getElementById('lb-cap');
   const spin = document.getElementById('lb-spin');
   let curTab = 0;
   let curIdx = -1;
   let loadSeq = 0;
 
   function items(t) {{ return TABS[t] ? TABS[t].items : []; }}
+
+  function esc(s) {{
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }}
 
   function show(tab, i) {{
     const list = items(tab);
@@ -685,15 +799,12 @@ const TABS = {tabs_json};
     img.src = it.img;
     img.dataset.seq = loadSeq;
     img.alt = it.store;
-    info.textContent = it.store + (it.event_title ? ' \\u2014 ' + it.event_title : '');
-    if (it.slurl) {{
-      vbtn.href = it.slurl;
-      vbtn.hidden = false;
-    }} else {{
-      vbtn.href = '#';
-      vbtn.hidden = true;
-    }}
+    let html = '<span class="lb-title">' + esc(it.store) + '</span>';
+    if (it.event_title) html += '<div class="lb-meta">' + esc(it.event_title) + '</div>';
+    if (it.slurl) html += '<div class="lb-row"><a class="lb-visit" href="' + esc(it.slurl) + '" target="_blank" rel="noopener">Visit store &#8599;</a></div>';
+    cap.innerHTML = html;
     lb.hidden = false;
+    lb.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
     if (img.complete && img.naturalWidth) {{
       spin.hidden = true;
@@ -714,7 +825,9 @@ const TABS = {tabs_json};
   }});
   function close() {{
     lb.hidden = true;
+    lb.setAttribute('aria-hidden', 'true');
     img.src = '';
+    cap.innerHTML = '';
     spin.hidden = true;
     lb.classList.remove('loading');
     document.body.style.overflow = '';
@@ -796,7 +909,13 @@ def main() -> None:
         default="Watchlist",
         help="Label for the right-aligned stores tab (default: Watchlist).",
     )
-    parser.add_argument("--copy-data", help="Copy the input JSON here too (default: alongside output).")
+    parser.add_argument(
+        "--copy-data",
+        nargs="?",
+        const="",
+        help="Copy the input JSON into docs/ (default: disabled). "
+        "Optional destination path; defaults to docs/matches.json.",
+    )
     args = parser.parse_args()
 
     inputs = [Path(p) for p in (args.input or [str(DEFAULT_INPUT)])]
@@ -830,12 +949,11 @@ def main() -> None:
         render_page(tabs, args.title, store_sets, args.stores_label), encoding="utf-8"
     )
 
-    if args.copy_data:
-        data_dst = Path(args.copy_data)
-    else:
-        data_dst = output_path.parent / inputs[0].name
-    data_dst.parent.mkdir(parents=True, exist_ok=True)
-    data_dst.write_bytes(inputs[0].read_bytes())
+    if args.copy_data is not None:
+        data_dst = Path(args.copy_data) if args.copy_data else output_path.parent / inputs[0].name
+        data_dst.parent.mkdir(parents=True, exist_ok=True)
+        data_dst.write_bytes(inputs[0].read_bytes())
+        print(f"Copied data to {data_dst}")
 
     total = sum(len(m) for _, m in tabs)
     total_stores = len({m.get("store_name") for _, m in tabs for m in m})
@@ -843,8 +961,6 @@ def main() -> None:
     print(f"Wrote {output_path} ({total} matches, {total_stores} stores, "
           f"{len(tabs) + (1 if store_sets else 0)} tab(s), "
           f"{dir_count} watchlist store(s))")
-    if str(data_dst) != str(inputs[0]):
-        print(f"Copied data to {data_dst}")
 
 
 if __name__ == "__main__":
