@@ -2,10 +2,10 @@
 
 # A
 Absence
-axia
+Axia
 
 # B
-bipolar
+Bipolar
 Bonnie
 
 # C
@@ -22,38 +22,40 @@ Effervescence
 # G
 
 # H
-hysteria
+Hysteria
 HimeDream
 
 # I
 
 # K
-kiru
+Kiru
 
 # L
-lunafell
+Lunafell
 
 # M
-moon rabbit
-moon elixir
+Moon Rabbit
+Moon Elixir
 M.mie
 
 # N
 
 # O
-oracle
+Oracle
 
 # P
 
 # R
-rebis
-renie
+Rebis
+Renie
 Red Blossom
 
 # S
-suicidal unborn
-seka
-skellybones
+Suicidal Unborn
+Seka
+Skellybones
+Salt & Pepper
+S&P
 
 # T
 theROOM
@@ -62,9 +64,9 @@ toksik
 # U
 
 # V
-valentine
-villena
-violent seduction
+Valentine
+Villena
+Violent seduction
 
 # W
 

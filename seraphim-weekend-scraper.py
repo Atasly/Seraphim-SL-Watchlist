@@ -11,8 +11,13 @@ exception: they are compared with prefix matching (see the facebook source).
 Supported sources
 -----------------
 seraphimsl
-    Seraphim weekend-sales category + event pages.  Event pages normally embed
-    an Envira Gallery; when a post has no inline gallery it instead points to a
+    By default this scans the Seraphim homepage feed (FEATURED, BOOSTED and
+    BLOG FEED modules) through the WordPress REST API, keeping only listings
+    whose title/excerpt mentions a weekend sale (sale, friday, saturday,
+    sunday, weekend, deals, kinky 69, waifu dreams, 7dayssale). Pass
+    --category-page (or any other --listing-url) to scan the classic
+    weekend-sales category page instead.  Event pages normally embed an
+    Envira Gallery; when a post has no inline gallery it instead points to a
     third-party sale site (link text usually contains "Gallery").  The scraper
     detects those links and hands them to a dedicated adapter for that site.
 
@@ -43,6 +48,9 @@ Examples
 
     python seraphim_weekend_scraper.py
 
+    python seraphim_weekend_scraper.py --no-facebook   # skip facebook albums (faster)
+    python seraphim_weekend_scraper.py --category-page # legacy category listing
+
     python seraphim_weekend_scraper.py --source altsl \
         --listing-url https://altsl.com/
 
@@ -66,6 +74,7 @@ import re
 import sys
 import time
 import unicodedata
+import warnings
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -84,6 +93,7 @@ USER_AGENT = (
 
 REQUEST_TIMEOUT = 30
 DEBUG = False
+SKIP_FACEBOOK = False
 STORE_LIST_FILE = Path(__file__).parent / "stores.txt"
 FB_COOKIE_FILE = Path(__file__).parent / "fb_cookies.json"
 
@@ -93,11 +103,23 @@ KNOWN_EXTERNAL_HOSTS = {
     "altsl.com",
     "35lsunday.com",
     "home.evoshopevent.com",
+    "wanderlustsl.com",
+    "flickr.com",
+    "www.flickr.com",
+    "enegry-sl.com",
 }
 # Hosts that never contain a scrapeable gallery (login walls, maps, nav noise).
 SKIP_EXTERNAL_HOSTS = {
     "instagram.com",
 }
+
+# A homepage feed listing is only opened (scraped) when its title or excerpt
+# mentions one of these, i.e. it actually looks like a weekend sale.
+SALE_FEED_KEYWORDS = (
+    "sale", "sales", "friday", "fridays", "saturday", "saturdays",
+    "sunday", "sundays", "weekend", "deals",
+    "kinky 69", "waifu dreams", "7dayssale",
+)
 
 
 def debug_log(msg: str) -> None:
@@ -160,6 +182,28 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
+def cache_bust_url(url: str) -> str:
+    """Add a per-request cache-busting query param.
+
+    Seraphim's nginx page cache serves stale copies of pages and of the
+    WordPress REST feed; a unique query string forces the origin to be hit.
+    """
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}v={int(time.time())}"
+
+
+_EVENT_OPENING_DATE_RE = re.compile(
+    r"Event Opening Date:\s*([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})",
+    re.IGNORECASE,
+)
+
+
+def extract_event_opening_date(text: str) -> str:
+    """Pull 'Event Opening Date: August 8, 2026' out of an excerpt."""
+    match = _EVENT_OPENING_DATE_RE.search(text)
+    return match.group(1) if match else ""
+
+
 def name_from_image_url(url: str) -> str:
     """Derive a store-ish name from an image filename (best effort)."""
     path = urlparse(url).path
@@ -182,6 +226,7 @@ class EventPage:
     url: str
     posted_date: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    excerpt: str = ""
 
 
 @dataclass
@@ -213,8 +258,11 @@ class SaleSource:
         )
 
     def fetch(self, url: str) -> BeautifulSoup:
-        debug_log(f"[fetch] GET {url}")
-        resp = self.session.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
+        # The site sits behind an nginx page cache that also caches the
+        # WordPress REST API; a per-request query param forces a fresh copy.
+        request_url = cache_bust_url(url)
+        debug_log(f"[fetch] GET {request_url}")
+        resp = self.session.get(request_url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
         resp.raise_for_status()
         debug_log(f"[fetch] OK {resp.status_code}: {resp.url} ({len(resp.text):,} bytes)")
         return BeautifulSoup(resp.text, "html.parser")
@@ -254,6 +302,11 @@ class SeraphimSource(SaleSource):
         since_date: Optional[date] = None,
         max_pages: int = 20,
     ) -> List[EventPage]:
+        if self._is_homepage(listing_url):
+            return self._list_homepage_feed(
+                listing_url, since_date=since_date, max_pages=max_pages
+            )
+
         events: List[EventPage] = []
         seen_urls = set()
 
@@ -315,6 +368,166 @@ class SeraphimSource(SaleSource):
 
         debug_log(f"[listing] scan complete: {len(events)} event page(s)")
         return events
+
+    @staticmethod
+    def _is_homepage(url: str) -> bool:
+        return urlparse(url).path.strip("/") == ""
+
+    @staticmethod
+    def _matches_feed_keywords(title: str, excerpt: str = "") -> bool:
+        haystack = f"{title} {excerpt}".lower()
+        return any(k in haystack for k in SALE_FEED_KEYWORDS)
+
+    @staticmethod
+    def _feed_last_page(module: BeautifulSoup) -> Optional[int]:
+        pages = []
+        for anchor in module.select("ul.pagination a.pagination-page[data-page]"):
+            try:
+                pages.append(int(anchor.get("data-page")))
+            except (TypeError, ValueError):
+                continue
+        return max(pages) if pages else None
+
+    def _list_homepage_feed(
+        self,
+        listing_url: str,
+        since_date: Optional[date] = None,
+        max_pages: int = 20,
+    ) -> List[EventPage]:
+        """Scan the homepage FEATURED / BOOSTED / BLOG FEED modules.
+
+        Category IDs and per-page counts come from each module's data
+        attributes; the posts themselves are fetched from the WordPress REST
+        API (the browser paginates the blog feed with AJAX on the same URL,
+        which a scraper cannot replay). Each module stops at its declared last
+        page, when a REST page comes back empty, or at the --since-date cutoff.
+        """
+        soup = self.fetch(listing_url)
+        events: List[EventPage] = []
+        seen_urls = set()
+
+        for module in soup.select("div.posts-blog-feed-module"):
+            title_el = module.select_one("h1.feed-title")
+            feed_title = title_el.get_text(strip=True) if title_el else ""
+            category_ids = (module.get("data-category_id") or "").strip()
+            if not category_ids:
+                continue
+            try:
+                per_page = int(module.get("data-posts_per_page") or "33")
+            except (TypeError, ValueError):
+                per_page = 33
+            last_page = self._feed_last_page(module)
+            debug_log(
+                f"[listing] feed module {feed_title!r}: categories={category_ids} "
+                f"per_page={per_page} last_page={last_page}"
+            )
+            events.extend(
+                self._feed_module_events(
+                    listing_url,
+                    category_ids,
+                    feed_title,
+                    per_page=per_page,
+                    last_page=last_page,
+                    since_date=since_date,
+                    max_pages=max_pages,
+                    seen_urls=seen_urls,
+                )
+            )
+
+        debug_log(f"[listing] homepage feed scan: {len(events)} event page(s)")
+        return events
+
+    def _feed_module_events(
+        self,
+        listing_url: str,
+        category_ids: str,
+        feed_title: str,
+        per_page: int,
+        last_page: Optional[int],
+        since_date: Optional[date],
+        max_pages: int,
+        seen_urls: set,
+    ) -> List[EventPage]:
+        events: List[EventPage] = []
+        per_page = max(1, min(per_page, 100))
+        base = urljoin(listing_url, "/wp-json/wp/v2/posts")
+        limit = last_page or max_pages
+        declared_total = 0
+
+        for page_num in range(1, limit + 1):
+            rest_url = (
+                f"{base}?categories={category_ids}&per_page={per_page}"
+                f"&page={page_num}&orderby=date&order=desc"
+            )
+            rest_url = cache_bust_url(rest_url)
+            try:
+                resp = self.session.get(rest_url, timeout=REQUEST_TIMEOUT)
+                resp.raise_for_status()
+                posts = resp.json()
+            except (requests.RequestException, ValueError) as exc:
+                debug_log(f"[listing] REST fetch failed ({rest_url}): {exc}")
+                break
+            if not isinstance(posts, list) or not posts:
+                debug_log(
+                    f"[listing] feed {feed_title!r} empty on page {page_num}; stopping"
+                )
+                break
+            if not declared_total:
+                try:
+                    declared_total = int(resp.headers.get("X-WP-TotalPages") or 0)
+                except (TypeError, ValueError):
+                    declared_total = 0
+                if last_page and declared_total:
+                    declared_total = min(declared_total, last_page)
+
+            stop = False
+            for post in posts:
+                event = self._event_from_rest_post(post)
+                if event is None or event.url in seen_urls:
+                    continue
+                ev_date = parse_post_date(event.posted_date) if event.posted_date else None
+                if since_date is not None and ev_date is not None and ev_date < since_date:
+                    debug_log(
+                        f"[listing] '{event.title}' ({event.posted_date}) is before "
+                        f"cutoff {since_date}; stopping pagination"
+                    )
+                    stop = True
+                    break
+                seen_urls.add(event.url)
+                if not self._matches_feed_keywords(event.title, event.excerpt):
+                    debug_log(
+                        f"[listing] filtered out (no sale keyword): '{event.title}'"
+                    )
+                    continue
+                events.append(event)
+                debug_log(f"[listing] in range: '{event.title}' -> {event.url}")
+
+            if stop or (declared_total and page_num >= declared_total):
+                break
+
+        return events
+
+    @staticmethod
+    def _event_from_rest_post(post: dict) -> Optional[EventPage]:
+        try:
+            title = clean_text(post["title"]["rendered"])
+            link = (post.get("link") or "").strip()
+        except (KeyError, TypeError):
+            return None
+        if not title or not link:
+            return None
+        excerpt_raw = post.get("excerpt") or {}
+        excerpt_html = (
+            excerpt_raw.get("rendered", "") if isinstance(excerpt_raw, dict) else ""
+        )
+        excerpt_text = clean_text(re.sub(r"<[^>]+>", " ", excerpt_html))
+        posted_date = extract_event_opening_date(excerpt_text)
+        if not posted_date:
+            posted = (post.get("date") or "").strip()
+            posted_date = posted[:10] if posted else ""
+        return EventPage(
+            title=title, url=link, posted_date=posted_date, excerpt=excerpt_text
+        )
 
     def parse_event_page(self, event: EventPage) -> List[GalleryItem]:
         debug_log(f"[event] fetching: {event.url}")
@@ -419,6 +632,9 @@ class SeraphimSource(SaleSource):
 
     def _parse_external_gallery(self, gallery_url: str, event: EventPage) -> List[GalleryItem]:
         source_cls = resolve_source_class(gallery_url) or GenericGallerySource
+        if source_cls is FacebookSource and SKIP_FACEBOOK:
+            debug_log("[external] skipping facebook gallery (--no-facebook)")
+            return []
         debug_log(f"[external] adapter={source_cls.name} url={gallery_url}")
 
         adapter = source_cls()
@@ -781,6 +997,386 @@ class WordPressGallerySource(SaleSource):
 
 
 # ---------------------------------------------------------------------------
+# Wanderlust gallery source (wanderlustsl.com, Robo Gallery)
+# ---------------------------------------------------------------------------
+_PW_PLAYWRIGHT = None
+_PW_BROWSER = None
+_PW_CONTEXT = None
+
+
+def _playwright_fetch_html(url: str) -> str:
+    """Load a page in headless Chromium and return the rendered HTML.
+
+    Some external gallery hosts (e.g. wanderlustsl.com) sit behind a
+    Cloudflare managed challenge that plain requests cannot pass.  A real
+    browser runs the challenge script and then exposes the full gallery
+    markup; we wait for a known gallery selector to confirm it resolved.
+    """
+    from playwright.sync_api import sync_playwright
+
+    global _PW_PLAYWRIGHT, _PW_BROWSER, _PW_CONTEXT
+    if _PW_CONTEXT is None:
+        if _PW_PLAYWRIGHT is None:
+            _PW_PLAYWRIGHT = sync_playwright().start()
+        if _PW_BROWSER is None:
+            _PW_BROWSER = _PW_PLAYWRIGHT.chromium.launch(headless=True)
+        _PW_CONTEXT = _PW_BROWSER.new_context(
+            user_agent=USER_AGENT,
+            locale="en-US",
+            viewport={"width": 1280, "height": 900},
+        )
+
+    page = _PW_CONTEXT.new_page()
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        try:
+            page.wait_for_selector(
+                ".rbs-img, .envira-gallery-link, .gallery-item",
+                timeout=30000,
+            )
+        except Exception:
+            debug_log("[playwright] gallery selector never appeared; using current DOM")
+        return page.content()
+    finally:
+        try:
+            page.close()
+        except Exception:
+            pass
+
+
+class WanderlustGallerySource(SaleSource):
+    """
+    Wanderlust Weekend uses the Robo Gallery plugin, whose items are divs
+    carrying the store/item caption in data-descbox:
+
+        <div class="rbs-img ...">
+          <div class="rbs-img-image rbs-lightbox" data-descbox="Store - Item">
+            <div class="rbs-img-thumbs"
+                 data-thumbnail="THUMB_URL" title="Store - Item"></div>
+            <div class="rbs-img-data-popup" data-popup="FULL_URL"></div>
+            <div class="thumbnail-overlay">
+              <div class="rbsIcons"><a href="SLURL"><i ...></i></a></div>
+            </div>
+          </div>
+          <div class="rbs-img-content">Store - Item</div>
+        </div>
+
+    The caption is "StoreName - ItemName"; the store name is the part before
+    the first " - ".
+    """
+
+    name = "wanderlust"
+
+    def fetch(self, url: str) -> BeautifulSoup:
+        try:
+            return BeautifulSoup(_playwright_fetch_html(url), "html.parser")
+        except Exception as exc:
+            debug_log(f"[wanderlust] browser fetch failed, falling back to requests: {exc}")
+            return super().fetch(url)
+
+    @classmethod
+    def _store_name_from_caption(cls, caption: str) -> str:
+        for sep in (" - ", " – "):
+            if sep in caption:
+                return caption.split(sep, 1)[0].strip()
+        return caption
+
+    def parse_event_page(self, event: EventPage) -> List[GalleryItem]:
+        soup = self.fetch(event.url)
+        items: List[GalleryItem] = []
+        seen = set()
+
+        for node in soup.select("div.rbs-img"):
+            image_div = node.select_one(".rbs-img-image")
+            title = ""
+            if image_div is not None:
+                title = (
+                    image_div.get("data-descbox")
+                    or image_div.get("title")
+                    or ""
+                )
+            if not title:
+                content = node.select_one(".rbs-img-content")
+                if content is not None:
+                    title = content.get_text(" ", strip=True)
+            title = clean_text(title)
+            if not title:
+                continue
+
+            image_url = ""
+            popup = node.select_one(".rbs-img-data-popup")
+            if popup is not None:
+                image_url = popup.get("data-popup") or ""
+            thumb_url = ""
+            thumb = node.select_one(".rbs-img-thumbs")
+            if thumb is not None:
+                thumb_url = thumb.get("data-thumbnail") or ""
+                if not image_url:
+                    image_url = thumb_url
+            image_url = urljoin(event.url, str(image_url).split("?", 1)[0])
+            thumb_url = urljoin(event.url, thumb_url) if thumb_url else ""
+            if not image_url or image_url in seen:
+                continue
+            seen.add(image_url)
+
+            caption = ""
+            link = node.select_one('.rbsIcons a[href*="secondlife.com"]')
+            if link is not None:
+                href = link.get("href") or ""
+                caption = f'<a href="{href}" target="_blank">Visit store</a>'
+
+            store_name = self._store_name_from_caption(title)
+            if not store_name:
+                continue
+
+            items.append(
+                GalleryItem(
+                    store_name=store_name,
+                    image_url=image_url,
+                    thumb_url=thumb_url,
+                    caption_html=caption,
+                )
+            )
+
+        for item in items:
+            item.source_event_title = event.title
+            item.source_event_url = event.url
+        debug_log(f"[wanderlust] parsed {len(items)} item(s)")
+        return items
+
+
+# ---------------------------------------------------------------------------
+# Flickr album source (flickr.com/photos/<user>/albums/<set>)
+# ---------------------------------------------------------------------------
+class FlickrGallerySource(SaleSource):
+    """Flickr photoset albums.
+
+    The album page is a JS-heavy shell, so photo titles and images are read
+    from the public photoset Atom feed every album page links to
+    (services/feeds/photoset.gne).  Photo titles look like
+    "<Store> - <EventName>"; the store name is the photo title with the album
+    title stripped off, plus bracket punctuation ("[ kunst ]", "{geek}").
+    """
+
+    name = "flickr"
+
+    @staticmethod
+    def _strip_brackets(name: str) -> str:
+        for open_char, close_char in (("[", "]"), ("{", "}"), ("(", ")")):
+            if name.startswith(open_char) and name.endswith(close_char):
+                return name[1:-1].strip()
+        return name
+
+    @classmethod
+    def _store_name_from_title(cls, photo_title: str, album_title: str) -> str:
+        title = clean_text(photo_title)
+        if not title:
+            return ""
+
+        if album_title:
+            words = re.findall(r"[0-9A-Za-z']+", album_title)
+            if len(words) >= 2:
+                joined = r"[^0-9A-Za-z]*".join(re.escape(w) for w in words)
+                match = re.search(joined + r"[^0-9A-Za-z]*$", title, re.IGNORECASE)
+                if match:
+                    store = title[: match.start()].strip(" \t-–—|")
+                    store = cls._strip_brackets(store)
+                    if store:
+                        return clean_text(store)
+
+        match = re.search(r"\s*[-–—]\s*", title)
+        store = title[: match.start()].strip() if match else title
+        store = cls._strip_brackets(store)
+        return clean_text(store)
+
+    @classmethod
+    def _album_title(cls, soup: BeautifulSoup) -> str:
+        node = soup.select_one('meta[property="og:title"]')
+        if node is None:
+            node = soup.select_one("title")
+        if node is None:
+            return ""
+        title = node.get("content") or node.get_text(" ", strip=True) or ""
+        return clean_text(title.split("| Flickr", 1)[0])
+
+    @classmethod
+    def _feed_url(cls, soup: BeautifulSoup, page_url: str) -> str:
+        node = soup.select_one('link[rel="alternate"][type="application/atom+xml"]')
+        if node is None:
+            return ""
+        href = node.get("href")
+        if not href:
+            return ""
+        return urljoin(page_url, href)
+
+    def _items_from_feed(self, feed_url: str, album_title: str) -> List[GalleryItem]:
+        items: List[GalleryItem] = []
+        seen = set()
+        try:
+            resp = self.session.get(feed_url, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            debug_log(f"[flickr] feed fetch failed: {exc}")
+            return items
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            feed = BeautifulSoup(resp.text, "html.parser")
+        for entry in feed.find_all("entry"):
+            title_node = entry.find("title")
+            if title_node is None:
+                continue
+            store_name = self._store_name_from_title(
+                title_node.get_text(), album_title
+            )
+            if not store_name:
+                continue
+
+            image_url = ""
+            enclosure = entry.find("link", rel="enclosure")
+            if enclosure is not None:
+                image_url = (enclosure.get("href") or "").strip()
+            if not image_url:
+                content_node = entry.find("content")
+                if content_node is not None:
+                    img = BeautifulSoup(
+                        content_node.get_text(), "html.parser"
+                    ).find("img")
+                    if img is not None:
+                        image_url = img.get("src") or ""
+            if not image_url or image_url in seen:
+                continue
+            seen.add(image_url)
+            if not image_url.startswith("http"):
+                image_url = "https:" + image_url
+
+            caption = ""
+            content_node = entry.find("content")
+            if content_node is not None:
+                content_soup = BeautifulSoup(
+                    content_node.get_text(), "html.parser"
+                )
+                slink = content_soup.select_one('a[href*="secondlife.com"]')
+                if slink is not None:
+                    href = (slink.get("href") or "").strip()
+                    caption = f'<a href="{href}" target="_blank">Visit store</a>'
+
+            items.append(
+                GalleryItem(
+                    store_name=store_name,
+                    image_url=image_url,
+                    caption_html=caption,
+                )
+            )
+        return items
+
+    def _items_from_ssr(self, soup: BeautifulSoup) -> List[GalleryItem]:
+        items: List[GalleryItem] = []
+        seen = set()
+        album_title = self._album_title(soup)
+        for anchor in soup.select("a.photo-link[title]"):
+            store_name = self._store_name_from_title(
+                anchor.get("title") or "", album_title
+            )
+            if not store_name:
+                continue
+            img = anchor.find_previous("img")
+            image_url = img.get("src") if img is not None else ""
+            if not image_url or image_url in seen:
+                continue
+            seen.add(image_url)
+            if not image_url.startswith("http"):
+                image_url = "https:" + image_url
+            items.append(GalleryItem(store_name=store_name, image_url=image_url))
+        return items
+
+    def parse_event_page(self, event: EventPage) -> List[GalleryItem]:
+        soup = self.fetch(event.url)
+        album_title = self._album_title(soup)
+        feed_url = self._feed_url(soup, event.url)
+        items = self._items_from_feed(feed_url, album_title) if feed_url else []
+        if not items:
+            debug_log("[flickr] feed empty; falling back to SSR photo cards")
+            items = self._items_from_ssr(soup)
+        for item in items:
+            item.source_event_title = event.title
+            item.source_event_url = event.url
+        debug_log(f"[flickr] parsed {len(items)} item(s)")
+        return items
+
+
+# ---------------------------------------------------------------------------
+# Tilda store-list source (e.g. enegry-sl.com/energylist)
+# ---------------------------------------------------------------------------
+class TildaGallerySource(SaleSource):
+    """Tilda-built store lists.
+
+    Each vendor is a .js-product card: the store name lives in the
+    .js-product-name element, the full image on img[data-original], and the
+    SLURL on a.js-product-link (secondlife:// scheme).
+    """
+
+    name = "tilda"
+
+    @staticmethod
+    def _slurl_to_web(href: str) -> str:
+        if href.startswith("secondlife://"):
+            return "https://maps.secondlife.com/secondlife/" + href[len("secondlife://"):]
+        return href
+
+    def parse_event_page(self, event: EventPage) -> List[GalleryItem]:
+        soup = self.fetch(event.url)
+        items: List[GalleryItem] = []
+        seen = set()
+
+        for card in soup.select(".js-product"):
+            name_node = card.select_one(".js-product-name")
+            if name_node is None:
+                continue
+            store_name = clean_text(name_node.get_text())
+            if not store_name:
+                continue
+
+            img = card.select_one("img[src]")
+            image_url = ""
+            if img is not None:
+                image_url = (
+                    img.get("data-original")
+                    or img.get("data-orig-file")
+                    or img.get("data-large-file")
+                    or img.get("src")
+                    or ""
+                )
+            image_url = str(image_url).split("?", 1)[0].strip()
+            if not image_url or image_url in seen:
+                continue
+            seen.add(image_url)
+
+            caption = ""
+            link = card.select_one('a[href*="secondlife.com"], a[href^="secondlife://"]')
+            if link is not None:
+                href = (link.get("href") or "").strip()
+                if href:
+                    caption = (
+                        f'<a href="{self._slurl_to_web(href)}" target="_blank">'
+                        "Visit store</a>"
+                    )
+
+            items.append(
+                GalleryItem(
+                    store_name=store_name,
+                    image_url=image_url,
+                    caption_html=caption,
+                )
+            )
+
+        for item in items:
+            item.source_event_title = event.title
+            item.source_event_url = event.url
+        debug_log(f"[tilda] parsed {len(items)} item(s)")
+        return items
+
+
+# ---------------------------------------------------------------------------
 # Wix gallery source (*.wixsite.com)
 # ---------------------------------------------------------------------------
 class WixGallerySource(SaleSource):
@@ -911,7 +1507,11 @@ class EvoShopSource(SaleSource):
                 elif isinstance(group, list):
                     entries.extend(group)
         elif isinstance(data, list):
-            entries = data
+            for group in data:
+                if isinstance(group, dict):
+                    entries.append(group)
+                elif isinstance(group, list):
+                    entries.extend(group)
 
         items: List[GalleryItem] = []
         for entry in entries:
@@ -1328,6 +1928,9 @@ SOURCES = {
     "seraphimsl": SeraphimSource,
     "altsl": AltSLSource,
     "wordpress": WordPressGallerySource,
+    "wanderlust": WanderlustGallerySource,
+    "flickr": FlickrGallerySource,
+    "tilda": TildaGallerySource,
     "wix": WixGallerySource,
     "evoshop": EvoShopSource,
     "facebook": FacebookSource,
@@ -1345,6 +1948,12 @@ def resolve_source_class(url: str) -> Optional[type]:
         return AltSLSource
     if host == "35lsunday.com":
         return WordPressGallerySource
+    if host == "wanderlustsl.com":
+        return WanderlustGallerySource
+    if host == "flickr.com":
+        return FlickrGallerySource
+    if host == "enegry-sl.com":
+        return TildaGallerySource
     if host == "home.evoshopevent.com":
         return EvoShopSource
     if host == "facebook.com":
@@ -1421,14 +2030,28 @@ def find_matches(items: List[GalleryItem], store_list_lower: List[str]) -> List[
 # CLI
 # ---------------------------------------------------------------------------
 def main() -> None:
-    global FB_COOKIE_FILE
+    global FB_COOKIE_FILE, SKIP_FACEBOOK
     parser = argparse.ArgumentParser(
         description="Scrape weekend sale galleries for matching stores."
     )
     parser.add_argument(
         "--listing-url",
-        default="https://www.seraphimsl.com/category/recurring-events/weekend-sales/",
-        help="Listing/homepage/direct sale URL to scan.",
+        default="https://www.seraphimsl.com/",
+        help="Listing/homepage/direct sale URL to scan (default: Seraphim "
+        "homepage feed: featured, boosted and blog feed).",
+    )
+    parser.add_argument(
+        "--category-page",
+        action="store_true",
+        help="Scan the legacy weekend-sales category page "
+        "(https://www.seraphimsl.com/category/recurring-events/weekend-sales/) "
+        "instead of the homepage feed.",
+    )
+    parser.add_argument(
+        "--no-facebook",
+        action="store_true",
+        help="Skip opening facebook.com gallery links (faster testing; links "
+        "are still detected).",
     )
     parser.add_argument(
         "--source",
@@ -1477,6 +2100,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.category_page:
+        args.listing_url = (
+            "https://www.seraphimsl.com/category/recurring-events/weekend-sales/"
+        )
+
     if args.since_date:
         try:
             since_date = datetime.strptime(args.since_date, "%Y-%m-%d").date()
@@ -1490,6 +2118,7 @@ def main() -> None:
         since_date = compute_default_since_date()
 
     FB_COOKIE_FILE = Path(args.fb_cookies)
+    SKIP_FACEBOOK = args.no_facebook
 
     if args.debug:
         global DEBUG

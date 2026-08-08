@@ -8,14 +8,14 @@ Asteroidbox
 Apricot Paws
 Azaran
 Azoury
-antaya
-arkhive
-unyu
+Antaya
+Arkhive
+Unyu
 
 # B
 Badwolf
 Belle Epoque
-bonbon
+Bonbon
 Beautiful Dirty Rich
 *B.D.R.*
 B.D.R.
@@ -31,16 +31,16 @@ Celesticat
 Cureless
 Cyberia
 Contraption
-cursery
-chain
+Cursery
+Chain
 
 # D
-dark agony
+Dark Agony
 Daodao
 Duckie
 
 # E
-emotional circus
+Emotional Circus
 Eliavah
 Eternus
 
@@ -50,19 +50,21 @@ Facs
 Friday
 
 # G
-graal
-goreglam
-gorsimi
+Graal
+Goreglam
+Gorsimi
 
 # H
 Huntt
-hazel
-hollow
+Hazel
+Hollow
 
 # I
 Insanya
 
 # K
+kunst
+[ kunst ]
 Kaithleen
 Killjoy
 Kururu
@@ -73,30 +75,30 @@ Litten
 Luas
 
 # M
-milkbath
+Milkbath
 Minuit
 Moon amore
-monso
-moon
-muse
-mudskin
-martyr
-mercurial
-mewsery
+Monso
+Moon
+Muse
+Mudskin
+Martyr
+Mercurial
+Mewsery
 
 # N
 Nyaru
-normandy
-nefekalum
+Normandy
+Nefekalum
 
 # O
-oushk
-opale
+Oushk
+Opale
 
 # P
 Petrichor
 Puddles
-polarbunny
+Polarbunny
 
 # R
 Rotten
@@ -107,40 +109,41 @@ Sintiklia
 Stealthic
 Stoic
 Studio exposure
-# TODO Stun poses or stun ? check
+stun poses
+stun pose
 Stun
 Sulfur
-skittish
-sour
-suravi
+Skittish
+Sour
+Suravi
 
 # T
-tardfish
-# TODO the forge or forge ? check
-The forge
-top1salon
-tentacio
-truth
-tres beau
+Tardfish.
+Tardfish
+Forge
+The Forge
+Top1salon
+Tentacio
+Truth
+Tres Beau
 
 # U
 Una
-unicult
-usagi society
+Unicult
+Usagi Society
 
 # V
 Valhalla
 Vaki kvaki
-violent seduction
-violetility
-vae victis
-verboten
-vermillion
+Violetility
+Vae victis
+Verboten
+Vermillion
 
 # W
-wraith
-wretch
-wasabi
+Wraith
+Wretch
+Wasabi
 
 # X
 Xiuxiu

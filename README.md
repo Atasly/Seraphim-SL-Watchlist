@@ -1,7 +1,7 @@
 # Seraphim Weekend Sales Scraper + Site Generator
 
 Scrapes Second Life weekend-sale galleries (Seraphim, AltSL, Facebook albums, and
-other external galleries) for stores on your watchlist, saves the matches to
+other external galleries) for stores on some watchlists, saves the matches to
 `matches.json`, and renders them into a static, dark, magazine-style website in
 `docs/` that can be hosted on GitHub Pages.
 
@@ -11,19 +11,21 @@ It is getting painful to trudge through the sea of AI slop pictures cropping mor
 For those interested in modding outfits, so many weekend sales end up cluttering the search with their no mod permissions.
 This is a tool that aims to help against that.
 
-All credits go to [SeraphimSL](https://www.seraphimsl.com/) creators for their invaluable work.
+All credits go to [SeraphimSL](https://www.seraphimsl.com/) team for their invaluable work.
 Without their presence and their work, this tool wouldn't function at all.
 
 This tool is meant to be run once per week, on the saturday-sunday, to scrape and build the website.
 By design it will only query lower res pictures from SeraphimSL first, when scrolling down to the matching tab. 
 Higher res pictures will be fetched if fullscreen is turned on.
-This matches SeraphimSL behaviour.
+This matches SeraphimSL behaviour, aiming for minimal disruption.
+
+If anyone has any issue with this project, please contact Atasly resident.
 
 ## Files
 
 | File                                  | Purpose                                              |
 | ------------------------------------- | ---------------------------------------------------- |
-| `seraphim-weekend-scraper.py`     | The scraper (produces `matches.json`)                |
+| `seraphim-weekend-scraper.py`         | The scraper (produces `matches.json`)                |
 | `generate_site.py`                    | The site generator (produces `docs/index.html`)      |
 | `Stores.txt`                          | Watchlist #1: one store name per line                |
 | `Stores - fatpack.txt`                | Watchlist #2: weekend sales that are mods in fatpack |
@@ -85,9 +87,19 @@ Basic run — everything from the most recent Friday onward, written to
 python seraphim-weekend-scraper.py
 ```
 
+This scans the Seraphim homepage feed (FEATURED, BOOSTED and BLOG FEED
+modules).  To keep using the classic weekend-sales category page instead,
+pass `--category-page`.
+
 Useful options:
 
 ```powershell
+# legacy weekend-sales category page
+python seraphim-weekend-scraper.py --category-page
+
+# skip facebook albums (faster)
+python seraphim-weekend-scraper.py --no-facebook
+
 # custom output file
 python seraphim-weekend-scraper.py --output matches.json
 

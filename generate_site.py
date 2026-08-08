@@ -3,7 +3,7 @@
 Weekend Sales matches -> static GitHub Pages site generator
 ===========================================================
 
-Reads a matches.json produced by seraphim-weekend-scraper_0.2.py and renders
+Reads a matches.json produced by seraphim-weekend-scraper.py and renders
 a single static page (docs/index.html) listing every match grouped by store
 name, sorted alphabetically, in a clean magazine style similar to Seraphim.
 
@@ -557,7 +557,7 @@ def render_stores_panel(store_sets: List[tuple], tab: int, title: str = "Stores 
     return (
         f'<div class="tab-panel" id="tab-{tab}">\n'
         f'  <h2 class="stores-title">{htmlmod.escape(title)}</h2>\n'
-        f'  <div class="tab-count">{total} store(s) on your watchlist</div>\n'
+        f'  <div class="tab-count">{total} store(s) - Contact Atasly resident for more</div>\n'
         f'  <div class="store-directory">\n'
         f'    {"\n".join(groups)}\n'
         f"  </div>\n"
