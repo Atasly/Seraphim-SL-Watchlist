@@ -33,9 +33,60 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
+from urllib.parse import quote
 
 DEFAULT_INPUT = Path(__file__).parent / "matches.json"
 DEFAULT_OUTPUT = Path(__file__).parent / "docs" / "index.html"
+
+FB_LOOKASIDE_URL = "https://lookaside.fbsbx.com/lookaside/crawler/media/?media_id={}"
+_IMAGE_MAGIC = (b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n", b"RIFF")
+_DOCS_DIR = DEFAULT_OUTPUT.parent
+
+_COPY_ICON = (
+    '<svg class="icon-copy" viewBox="0 0 16 16" width="12" height="12" fill="none" '
+    'stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" '
+    'aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/>'
+    '<path d="M10.5 3.5v-1A1.5 1.5 0 0 0 9 1H3.5A1.5 1.5 0 0 0 2 2.5v6A1.5 1.5 0 0 0 3.5 10h1"/></svg>'
+    '<svg class="icon-copied" viewBox="0 0 16 16" width="12" height="12" fill="none" '
+    'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" '
+    'aria-hidden="true"><path d="M2.5 8.5 6 12 13.5 4.5"/></svg>'
+)
+
+
+def _local_image_usable(url: str) -> bool:
+    """True when a docs-relative image path exists and looks like a real image."""
+    if not url or "://" in url or url.startswith(("//", "data:", "/")):
+        return False
+    path = (_DOCS_DIR / url).resolve()
+    try:
+        if not path.is_file():
+            return False
+        with open(path, "rb") as fh:
+            head = fh.read(12)
+        return head.startswith(_IMAGE_MAGIC)
+    except OSError:
+        return False
+
+
+def resolve_item_image(item: dict, field: str) -> str:
+    """Resolve item[field] to a URL the page can actually serve.
+
+    Local img/fb/... paths are used only when the file is present and looks
+    like a real image; otherwise the Facebook lookaside URL is substituted
+    (when a media_id is known) so a card never points at a missing file.
+    Non-local URLs pass through unchanged.
+    """
+    url = item.get(field) or ""
+    if not url:
+        return ""
+    if url.startswith("img/fb/"):
+        if _local_image_usable(url):
+            return url
+        media_id = item.get("media_id") or ""
+        if media_id:
+            return FB_LOOKASIDE_URL.format(quote(media_id, safe=""))
+        return ""
+    return url
 
 STYLE = """:root {
   --bg: #0a0a0f;
@@ -176,6 +227,47 @@ a:hover { text-decoration: underline; }
   font-size: 12.5px;
   color: var(--muted);
 }
+
+.daybar {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 14px 20px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  padding: 7px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.chip:hover { color: var(--text); border-color: var(--border-strong); }
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.chip .chip-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, .18);
+  font-size: 11px;
+  font-weight: 700;
+}
+.chip.active .chip-count { background: rgba(0, 0, 0, .18); }
+.card[data-day] { }
+.card[hidden] { display: none; }
+.card.hidden { display: none; }
+.daybar[hidden] { display: none; }
 
 .stores-title {
   margin: 22px 0 2px;
@@ -338,6 +430,37 @@ a:hover { text-decoration: underline; }
 }
 .badge.slurl a { color: #fff; }
 .badge.slurl a:hover { text-decoration: underline; }
+.copy-btn {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 5px;
+  vertical-align: middle;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, .85);
+  cursor: pointer;
+}
+.copy-btn:hover { background: rgba(255, 255, 255, .16); }
+.copy-btn:active { background: rgba(255, 255, 255, .24); }
+.copy-btn svg { width: 12px; height: 12px; }
+.copy-btn .icon-copied { display: none; }
+.copy-btn.copied .icon-copy { display: none; }
+.copy-btn.copied .icon-copied { display: block; }
+.card-noimg {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  background: var(--panel3);
+  color: var(--muted);
+}
+.card-noimg span {
+  font-size: 34px;
+  font-weight: 700;
+  opacity: .5;
+}
 .card-caption {
   font-size: 12px;
   color: var(--muted);
@@ -441,6 +564,13 @@ a:hover { text-decoration: underline; }
   margin: 0 auto;
   overflow-wrap: anywhere;
 }
+.lb-count {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  margin-bottom: 6px;
+}
 .lb-row { margin-top: 10px; }
 .lb-visit {
   display: inline-block;
@@ -467,6 +597,17 @@ a:hover { text-decoration: underline; }
   vertical-align: -1px;
   background: var(--pin-icon) no-repeat center / contain;
 }
+.lb-row .copy-btn {
+  width: 30px;
+  height: 30px;
+  margin-left: 8px;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  color: var(--muted);
+}
+.lb-row .copy-btn svg { width: 14px; height: 14px; }
+.lb-row .copy-btn:hover { color: #fff; background: var(--panel3); }
 .lb-btn {
   position: fixed;
   z-index: 1001;
@@ -536,8 +677,11 @@ def sanitize_caption(raw: str) -> str:
 
     text = TAG_RE.sub(keep, text)
 
-    # Normalize every SLURL link (teleport) to a consistent "Visit store" label.
-    text = SLURL_A_RE.sub(r"\1Visit store\3", text)
+    # Drop the teleport link entirely — the card badge is the single
+    # "Visit store" button — then clean up leftover empty tags/separators.
+    text = SLURL_A_RE.sub("", text)
+    text = re.sub(r"<(\w+)\s*></\1>", "", text)
+    text = re.sub(r"^(?:[\s\u00a0]*(?:-|–|—|\|)[\s\u00a0]*)+", "", text)
 
     for tag in ALLOWED_TAGS:
         if tag == "br":
@@ -557,7 +701,7 @@ def extract_slurl(caption_html: str) -> str:
 
 def render_card(item: dict, index: int, tab: int) -> str:
     store = htmlmod.escape(item.get("store_name", ""))
-    img = htmlmod.escape(item.get("image_url", ""))
+    img = resolve_item_image(item, "image_url")
     event_title = htmlmod.escape(item.get("source_event_title", ""))
     event_url = htmlmod.escape(item.get("source_event_url", ""))
     gallery_url = htmlmod.escape(item.get("gallery_url", ""))
@@ -572,15 +716,33 @@ def render_card(item: dict, index: int, tab: int) -> str:
             f'<span class="badge"><a href="{gallery_url}" target="_blank" rel="noopener">Gallery</a></span>'
         )
 
+    slurl = item.get("slurl") or extract_slurl(item.get("caption_html", ""))
+    if slurl:
+        badges.append(
+            f'<span class="badge slurl"><a href="{htmlmod.escape(slurl)}" target="_blank" rel="noopener">Visit store</a>'
+            f'<button class="copy-btn" type="button" data-slurl="{htmlmod.escape(slurl)}" title="Copy link" aria-label="Copy link">{_COPY_ICON}</button></span>'
+        )
+
     caption = sanitize_caption(item.get("caption_html", ""))
     caption_html = f'<div class="card-caption">{caption}</div>' if caption else ""
     badges_html = f'<div class="card-badges">{"".join(badges)}</div>' if badges else ""
 
-    thumb = htmlmod.escape(item.get("thumb_url") or item.get("image_url", ""))
+    thumb = resolve_item_image(item, "thumb_url") or img
+    day = htmlmod.escape(item.get("sale_day", ""))
+
+    if img:
+        anchor = (
+            f'<a href="{htmlmod.escape(img)}" target="_blank" rel="noopener" class="card-anchor" '
+            f'data-tab="{tab}" data-index="{index}">'
+            f'<img src="{htmlmod.escape(thumb)}" alt="{store}" loading="lazy"></a>'
+        )
+    else:
+        initial = htmlmod.escape((item.get("store_name") or "?")[:1].upper())
+        anchor = f'<div class="card-noimg"><span>{initial}</span></div>'
 
     return f"""
-    <div class="card">
-      <a href="{img}" target="_blank" rel="noopener" class="card-anchor" data-tab="{tab}" data-index="{index}"><img src="{thumb}" alt="{store}" loading="lazy"></a>
+    <div class="card" data-day="{day}">
+      {anchor}
       <div class="card-body">
         <p class="card-title">{store}</p>
         {badges_html}
@@ -602,15 +764,19 @@ def render_flat_grid(matches: List[dict], tab: int) -> tuple:
     flat: List[dict] = []
     for store in ordered:
         flat.extend(by_store[store])
+    # Stable order: sale day first (undefined days last), then store name.
+    day_rank = {"friday": 0, "saturday": 1, "sunday": 2}
+    flat.sort(key=lambda it: (day_rank.get(it.get("sale_day", ""), 3), it.get("store_name", "").lower()))
     cards = "\n".join(render_card(it, i, tab) for i, it in enumerate(flat))
     items = [
         {
-            "img": it.get("image_url", ""),
-            "thumb": it.get("thumb_url") or it.get("image_url", ""),
+            "img": resolve_item_image(it, "image_url"),
+            "thumb": resolve_item_image(it, "thumb_url") or resolve_item_image(it, "image_url"),
             "store": it.get("store_name", ""),
             "event_url": it.get("source_event_url", ""),
             "event_title": it.get("source_event_title", ""),
-            "slurl": extract_slurl(it.get("caption_html", "")),
+            "slurl": it.get("slurl") or extract_slurl(it.get("caption_html", "")),
+            "day": it.get("sale_day", ""),
         }
         for it in flat
     ]
@@ -688,9 +854,9 @@ def render_page(
         body, items = render_flat_grid(matches, t)
         total += len(items)
         total_stores += len({i["store"] for i in items})
-        count = f'<div class="tab-count">{len(items)} match(es) across {len({i["store"] for i in items})} store(s)</div>'
+        #count = f'<div class="tab-count">{len(items)} match(es) across {len({i["store"] for i in items})} store(s)</div>'
         active = ' data-active=""' if t == 0 else ''
-        panels.append(f'<div class="tab-panel" id="tab-{t}"{active}>{count}{body}</div>')
+        panels.append(f'<div class="tab-panel" id="tab-{t}"{active}>{body}</div>')
         tabs_data.append({"label": label, "items": items})
 
     store_tab = len(tabs)
@@ -714,6 +880,31 @@ def render_page(
         tabs_html = (
             '<nav class="tabs" id="tabs">\n'
             + "\n".join(buttons)
+            + "\n</nav>"
+        )
+
+    # Day-bar counts reflect the active category tab, so the initial render
+    # (tab 0) seeds the chips; JS recomputes them when the tab changes.
+    first_tab_items = tabs_data[0]["items"] if tabs_data else []
+    all_total = len(first_tab_items)
+    day_counts = {"friday": 0, "saturday": 0, "sunday": 0}
+    for it in first_tab_items:
+        day = it.get("day") or ""
+        if day in day_counts:
+            day_counts[day] += 1
+    daybar_html = ""
+    if sum(day_counts.values()):
+        rows = [("all", "All", all_total)] + [
+            (day, day.title(), day_counts[day])
+            for day in ("friday", "saturday", "sunday")
+        ]
+        daybar_html = (
+            '<nav class="daybar" id="daybar">\n'
+            + "\n".join(
+                f'  <button class="chip{" active" if day == "all" else ""}" '
+                f'data-day="{day}">{label} <span class="chip-count">{n}</span></button>'
+                for day, label, n in rows
+            )
             + "\n</nav>"
         )
 
@@ -744,9 +935,11 @@ def render_page(
 
 {tabs_html}
 
+{daybar_html}
+
 <div class="summary wrap"><span class="pill">
   {total} match(es) across {total_stores} store(s)
-  &middot; sorted by store name
+  &middot; sorted by store
   &middot; generated {now}
 </span></div>
 
@@ -778,8 +971,22 @@ const TABS = {tabs_json};
   let curTab = 0;
   let curIdx = -1;
   let loadSeq = 0;
+  let activeDay = 'all';
 
   function items(t) {{ return TABS[t] ? TABS[t].items : []; }}
+
+  function dayMatches(day) {{
+    return activeDay === 'all' || day === activeDay;
+  }}
+
+  function visibleIndices(tab) {{
+    const list = items(tab);
+    const out = [];
+    for (let i = 0; i < list.length; i++) {{
+      if (dayMatches(list[i].day)) out.push(i);
+    }}
+    return out;
+  }}
 
   function esc(s) {{
     return String(s == null ? '' : s)
@@ -799,9 +1006,14 @@ const TABS = {tabs_json};
     img.src = it.img;
     img.dataset.seq = loadSeq;
     img.alt = it.store;
-    let html = '<span class="lb-title">' + esc(it.store) + '</span>';
+    const vis = visibleIndices(tab);
+    const pos = vis.indexOf(curIdx);
+    const shown = pos === -1 ? curIdx + 1 : pos + 1;
+    const shownOf = pos === -1 ? list.length : vis.length;
+    let html = '<div class="lb-count">' + shown + ' / ' + shownOf + '</div>';
+    html += '<span class="lb-title">' + esc(it.store) + '</span>';
     if (it.event_title) html += '<div class="lb-meta">' + esc(it.event_title) + '</div>';
-    if (it.slurl) html += '<div class="lb-row"><a class="lb-visit" href="' + esc(it.slurl) + '" target="_blank" rel="noopener">Visit store &#8599;</a></div>';
+    if (it.slurl) html += '<div class="lb-row"><a class="lb-visit" href="' + esc(it.slurl) + '" target="_blank" rel="noopener">Visit store &#8599;</a><button class="copy-btn lb-copy" type="button" data-slurl="' + esc(it.slurl) + '" title="Copy link" aria-label="Copy link"><svg class="icon-copy" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 3.5v-1A1.5 1.5 0 0 0 9 1H3.5A1.5 1.5 0 0 0 2 2.5v6A1.5 1.5 0 0 0 3.5 10h1"/></svg><svg class="icon-copied" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8.5 6 12 13.5 4.5"/></svg></button></div>';
     cap.innerHTML = html;
     lb.hidden = false;
     lb.setAttribute('aria-hidden', 'false');
@@ -831,10 +1043,55 @@ const TABS = {tabs_json};
     spin.hidden = true;
     lb.classList.remove('loading');
     document.body.style.overflow = '';
+    const link = document.querySelector('.card-anchor[data-tab="' + curTab + '"][data-index="' + curIdx + '"]');
+    if (link) link.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
   }}
-  function nav(d) {{ show(curTab, curIdx + d); }}
+  function nav(d) {{
+    const vis = visibleIndices(curTab);
+    if (!vis.length) return;
+    let pos = vis.indexOf(curIdx);
+    if (pos === -1) pos = 0;
+    pos = (pos + d + vis.length) % vis.length;
+    show(curTab, vis[pos]);
+  }}
+
+  function applyFilter() {{
+    let visible = 0;
+    const storeSet = new Set();
+    document.querySelectorAll('.card').forEach(function (card) {{
+      const ok = dayMatches(card.dataset.day || '');
+      card.classList.toggle('hidden', !ok);
+      if (ok) {{
+        visible++;
+        const title = card.querySelector('.card-title');
+        if (title) storeSet.add(title.textContent);
+      }}
+    }});
+    const countEl = document.querySelector('.tab-panel[data-active] .tab-count');
+    if (countEl) {{
+      countEl.textContent = visible + ' match(es) across ' + storeSet.size + ' store(s)';
+    }}
+  }}
+
+  function updateDayCounts() {{
+    const list = items(curTab);
+    const counts = {{ friday: 0, saturday: 0, sunday: 0 }};
+    for (let i = 0; i < list.length; i++) {{
+      const d = list[i].day;
+      if (counts[d] !== undefined) counts[d]++;
+    }}
+    const daybar = document.getElementById('daybar');
+    if (!daybar) return;
+    daybar.querySelectorAll('.chip').forEach(function (chip) {{
+      const d = chip.dataset.day;
+      const n = d === 'all' ? list.length : (counts[d] || 0);
+      const span = chip.querySelector('.chip-count');
+      if (span) span.textContent = n;
+    }});
+  }}
 
   function selectTab(t) {{
+    curTab = t;
     document.querySelectorAll('.tab-panel').forEach(function (p, i) {{
       if (i === t) p.setAttribute('data-active', '');
       else p.removeAttribute('data-active');
@@ -842,6 +1099,10 @@ const TABS = {tabs_json};
     document.querySelectorAll('.tab-btn').forEach(function (b) {{
       b.classList.toggle('active', Number(b.dataset.tab) === t);
     }});
+    const daybar = document.getElementById('daybar');
+    if (daybar) daybar.hidden = document.querySelector('.tab-panel[data-active] .card') == null;
+    updateDayCounts();
+    applyFilter();
   }}
 
   document.querySelectorAll('.card img').forEach(function (im) {{
@@ -861,6 +1122,19 @@ const TABS = {tabs_json};
   document.querySelectorAll('.tab-btn').forEach(function (b) {{
     b.addEventListener('click', function () {{ selectTab(Number(b.dataset.tab) || 0); }});
   }});
+  const daybar = document.getElementById('daybar');
+  if (daybar) {{
+    daybar.querySelectorAll('.chip').forEach(function (chip) {{
+      chip.addEventListener('click', function () {{
+        activeDay = chip.dataset.day;
+        daybar.querySelectorAll('.chip').forEach(function (c) {{
+          c.classList.toggle('active', c === chip);
+        }});
+        applyFilter();
+        if (!lb.hidden) close();
+      }});
+    }});
+  }}
   document.getElementById('lb-close').addEventListener('click', close);
   document.getElementById('lb-prev').addEventListener('click', function () {{ nav(-1); }});
   document.getElementById('lb-next').addEventListener('click', function () {{ nav(1); }});
@@ -868,10 +1142,43 @@ const TABS = {tabs_json};
     if (e.target === lb) close();
   }});
   document.addEventListener('keydown', function (e) {{
-    if (lb.hidden) return;
-    if (e.key === 'Escape') close();
-    else if (e.key === 'ArrowLeft') nav(-1);
-    else if (e.key === 'ArrowRight') nav(1);
+    if (!lb.hidden) {{
+      if (e.key === 'Escape') close();
+      else if (e.key === 'ArrowLeft') nav(-1);
+      else if (e.key === 'ArrowRight') nav(1);
+      return;
+    }}
+    if (e.key === 'Escape') window.scrollTo({{ top: 0, behavior: 'smooth' }});
+  }});
+
+  document.addEventListener('click', function (e) {{
+    var btn = e.target && e.target.closest ? e.target.closest('.copy-btn') : null;
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var text = btn.getAttribute('data-slurl') || '';
+    if (!text) return;
+    var ok = function () {{
+      btn.classList.add('copied');
+      setTimeout(function () {{ btn.classList.remove('copied'); }}, 1500);
+    }};
+    var legacy = function () {{
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {{ document.execCommand('copy'); }} catch (err) {{}}
+      document.body.removeChild(ta);
+      ok();
+    }};
+    if (navigator.clipboard && navigator.clipboard.writeText) {{
+      navigator.clipboard.writeText(text).then(ok).catch(legacy);
+    }} else {{
+      legacy();
+    }}
   }});
 
   selectTab(0);

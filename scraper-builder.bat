@@ -5,11 +5,25 @@ echo ========================================
 echo Running Seraphim weekend scraper...
 echo ========================================
 
-python seraphim-weekend-scraper.py --stores-file "Stores.txt" --output "matches.json" --stores-file "Stores - fatpack.txt" --output "matches - fatpack.json" --stores-file "Stores - build.txt" --output "matches - build.json"
+python seraphim-weekend-scraper.py --stores-file "Stores.txt" --output "matches.fresh.json" --stores-file "Stores - fatpack.txt" --output "matches - fatpack.fresh.json" --stores-file "Stores - build.txt" --output "matches - build.fresh.json"
 
 if errorlevel 1 (
     echo.
     echo ERROR: Scraper failed. Site generation will not run.
+    pause
+    exit /b 1
+)
+
+echo.
+echo ========================================
+echo Consolidating matches (4-day persistence)...
+echo ========================================
+
+python consolidate_matches.py --keep-days 4 --main "matches.json" --fresh "matches.fresh.json" --main "matches - fatpack.json" --fresh "matches - fatpack.fresh.json" --main "matches - build.json" --fresh "matches - build.fresh.json"
+
+if errorlevel 1 (
+    echo.
+    echo ERROR: Consolidation step failed.
     pause
     exit /b 1
 )

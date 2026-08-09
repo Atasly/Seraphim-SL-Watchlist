@@ -83,6 +83,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
+from PIL import Image
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -107,6 +108,8 @@ KNOWN_EXTERNAL_HOSTS = {
     "flickr.com",
     "www.flickr.com",
     "enegry-sl.com",
+    "access-sl.com",
+    "www.access-sl.com",
 }
 # Hosts that never contain a scrapeable gallery (login walls, maps, nav noise).
 SKIP_EXTERNAL_HOSTS = {
@@ -170,6 +173,23 @@ def parse_post_date(text: Optional[str]) -> Optional[date]:
         except ValueError:
             continue
     return None
+
+
+WEEKEND_DAYS = {"friday", "saturday", "sunday"}
+
+
+def sale_day_for_event(event: EventPage) -> str:
+    """Day (friday/saturday/sunday) the sale belongs to.
+
+    Prefers the event's posted date when it falls on a weekend day, otherwise
+    falls back to the run date (the day the script was executed).
+    """
+    ev_date = parse_post_date(event.posted_date)
+    if ev_date is not None:
+        day = ev_date.strftime("%A").lower()
+        if day in WEEKEND_DAYS:
+            return day
+    return datetime.now().date().strftime("%A").lower()
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +259,11 @@ class GalleryItem:
     source_event_url: str = ""
     gallery_url: str = ""
     match_kind: str = "exact"
+    slurl: str = ""
+    match_text: str = ""
+    media_id: str = ""
+    sale_day: str = ""
+    matched_at: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +307,13 @@ class SaleSource:
 
     def parse_event_page(self, event: EventPage) -> List[GalleryItem]:
         raise NotImplementedError
+
+    def finalize_item_images(self, items: List[GalleryItem]) -> None:
+        """Post-match hook: download/save local copies of item images.
+
+        Called once per run with the unique matched items; the default does
+        nothing (remote hotlinking).  Sources override it to persist images.
+        """
 
 
 # ---------------------------------------------------------------------------
@@ -1754,6 +1786,9 @@ def _fb_scroll_to_load(page, selector: str) -> None:
 
 _FB_FBID_RE = re.compile(r"fbid=(\d+)")
 _FB_PHOTO_META_RE = re.compile(r'<meta name="description" content="([^"]*)"')
+_FB_OG_IMAGE_RE = re.compile(r'<meta property="og:image" content="([^"]*)"')
+_FB_SLURL_RE = re.compile(r"https?://maps\.secondlife\.com/[^\"'\s<]+")
+_FB_LREDIR_RE = re.compile(r"l\.facebook\.com/l\.php\?u=([^\"'\s<]+)")
 _FB_HTTP_HEADERS = {
     "User-Agent": USER_AGENT,
     "Accept-Language": "en-US,en;q=0.9",
@@ -1761,6 +1796,11 @@ _FB_HTTP_HEADERS = {
 _FB_COOKIE_DICT: dict = {}
 _FB_COOKIE_LOADED = False
 _FB_SET_ID = ""
+
+# Where downloaded Facebook photos (large + small) are saved so the generated
+# site can serve them from the GitHub Pages docs/ root.
+FB_IMAGES_DIR = Path(__file__).parent / "docs" / "img" / "fb"
+FB_THUMB_WIDTH = 640
 
 
 def _fb_ensure_cookies(cookie_file: Path) -> None:
@@ -1777,17 +1817,43 @@ def _fb_clean_caption(raw: str) -> str:
     The caption is emitted as HTML numeric character references for the fancy
     unicode letters (&#x1d413;...).  Unescape them, NFKC-fold them back to
     ASCII (mathematical-bold -> plain), and drop any embedded http(s) URLs.
+    Line breaks are preserved so the first line can be used as the store name.
     """
     if not raw:
         return ""
     text = html.unescape(html.unescape(raw))
     text = unicodedata.normalize("NFKC", text)
     text = re.sub(r"https?://[^\s]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r" *\n *", "\n", text)
+    text = re.sub(r"\n{2,}", "\n", text)
+    return text.strip()
 
 
-def _fb_fetch_caption(fbid: str) -> str:
-    """Fetch one photo page over HTTP and return its clean caption."""
+def _fb_extract_slurl(raw: str) -> str:
+    """Pull a maps.secondlife.com teleport URL out of a raw photo caption."""
+    if not raw:
+        return ""
+    m = _FB_SLURL_RE.search(raw)
+    if m:
+        return html.unescape(m.group(0).rstrip(".,;)]}'\""))
+    m = _FB_LREDIR_RE.search(raw)
+    if m:
+        try:
+            decoded = parse_qs(html.unescape(m.group(1))).get("u", [""])[0]
+        except Exception:
+            decoded = ""
+        if "maps.secondlife.com" in decoded:
+            return decoded
+    return ""
+
+
+def _fb_fetch_caption(fbid: str) -> tuple:
+    """Fetch one photo page over HTTP; return (clean caption, slurl).
+
+    The caption comes from <meta name="description">, the teleport URL is
+    read out of the same raw text before it is cleaned.
+    """
     url = f"https://www.facebook.com/photo/?fbid={fbid}&set={_FB_SET_ID}"
     resp = None
     for attempt in range(3):
@@ -1804,9 +1870,11 @@ def _fb_fetch_caption(fbid: str) -> str:
             break
         time.sleep(0.4 * (attempt + 1))
     if resp is None or resp.status_code != 200:
-        return ""
+        return "", ""
     m = _FB_PHOTO_META_RE.search(resp.text)
-    return _fb_clean_caption(m.group(1)) if m else ""
+    if not m:
+        return "", ""
+    return _fb_clean_caption(m.group(1)), _fb_extract_slurl(m.group(1))
 
 
 def _fb_extract_photos(page, selector: str, event: EventPage) -> List[GalleryItem]:
@@ -1815,7 +1883,8 @@ def _fb_extract_photos(page, selector: str, event: EventPage) -> List[GalleryIte
     The album grid only exposes the OCR alt text, so each photo page is read
     separately: its <meta name="description"> holds the real caption (e.g.
     "Two Moon Gardens", possibly in mathematical-bold unicode).  Caption
-    fetches run in a small thread pool.
+    fetches run in a small thread pool.  The first caption line becomes the
+    store name; the teleport URL is kept aside for the site's Visit-store pill.
     """
     fbids: List[str] = []
     seen: set = set()
@@ -1834,23 +1903,29 @@ def _fb_extract_photos(page, selector: str, event: EventPage) -> List[GalleryIte
     if not fbids:
         return []
 
-    captions: List[str] = []
+    results: List[tuple] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
-        captions = list(ex.map(_fb_fetch_caption, fbids))
+        results = list(ex.map(_fb_fetch_caption, fbids))
 
-    if captions and not any(captions):
+    if results and not any(caption for caption, _ in results):
         debug_log(f"[facebook] no photo captions fetched from {event.url} — session cookies may be stale")
 
     items: List[GalleryItem] = []
-    for fbid, caption in zip(fbids, captions):
+    for fbid, (caption, slurl) in zip(fbids, results):
         if not caption:
             continue
+        lines = [ln.strip() for ln in caption.split("\n") if ln.strip()]
+        store = lines[0] if lines else caption
         items.append(
             GalleryItem(
-                store_name=caption,
+                store_name=store,
                 image_url=f"https://lookaside.fbsbx.com/lookaside/crawler/media/?media_id={fbid}",
-                caption_html="",
+                thumb_url="",
+                caption_html=caption,
                 match_kind="caption",
+                slurl=slurl,
+                match_text=caption,
+                media_id=fbid,
             )
         )
 
@@ -1858,6 +1933,112 @@ def _fb_extract_photos(page, selector: str, event: EventPage) -> List[GalleryIte
         item.source_event_title = event.title
         item.source_event_url = event.url
     return items
+
+
+def _fb_fetch_og_image(fbid: str) -> str:
+    """Return the full-size og:image URL for a photo page (or empty)."""
+    url = f"https://www.facebook.com/photo/?fbid={fbid}&set={_FB_SET_ID}"
+    try:
+        resp = requests.get(
+            url,
+            headers=_FB_HTTP_HEADERS,
+            cookies=_FB_COOKIE_DICT or None,
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException:
+        return ""
+    if resp is None or resp.status_code != 200:
+        return ""
+    m = _FB_OG_IMAGE_RE.search(resp.text)
+    return html.unescape(m.group(1)) if m else ""
+
+
+def _fb_is_valid_image(path: Path) -> bool:
+    """Return True when path exists and decodes as a real Pillow image."""
+    try:
+        with Image.open(path) as im:
+            im.verify()
+        return True
+    except Exception:
+        return False
+
+
+def _fb_download_image(url: str) -> bytes:
+    """Fetch a photo URL with the session headers/cookies; return raw bytes."""
+    if not url:
+        return b""
+    try:
+        resp = requests.get(
+            url,
+            headers=_FB_HTTP_HEADERS,
+            cookies=_FB_COOKIE_DICT or None,
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException:
+        return b""
+    if resp is None or resp.status_code != 200:
+        return b""
+    return resp.content
+
+
+def _fb_save_item_images(item: GalleryItem) -> None:
+    """Download one matched Facebook photo and write large + small local files.
+
+    The large image comes from the photo page's og:image meta (session-cookie
+    fetch); if that is unavailable the public lookaside crawler URL is tried.
+    The small version is a Pillow thumbnail.  Only when both local files are
+    real, decodable images does the item's image_url/thumb_url switch to the
+    relative paths the site can serve from docs/; otherwise the remote
+    lookaside URL stays untouched so the page never points at broken files.
+    """
+    if not item.media_id:
+        return
+    fbid = item.media_id
+    try:
+        FB_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+    large = FB_IMAGES_DIR / f"{fbid}.jpg"
+    small = FB_IMAGES_DIR / f"{fbid}-s.jpg"
+
+    if not _fb_is_valid_image(large):
+        if large.exists():
+            try:
+                large.unlink()
+            except OSError:
+                pass
+        data = _fb_download_image(_fb_fetch_og_image(fbid)) or _fb_download_image(item.image_url)
+        if not data:
+            debug_log(f"[facebook] could not download image for photo {fbid}")
+            return
+        try:
+            large.write_bytes(data)
+        except OSError:
+            return
+        if not _fb_is_valid_image(large):
+            try:
+                large.unlink()
+            except OSError:
+                pass
+            debug_log(f"[facebook] downloaded data is not a real image for photo {fbid}")
+            return
+
+    if not _fb_is_valid_image(small):
+        try:
+            with Image.open(large) as im:
+                im = im.convert("RGB")
+                if im.width > FB_THUMB_WIDTH:
+                    im.thumbnail((FB_THUMB_WIDTH, FB_THUMB_WIDTH))
+                im.save(small, "JPEG", quality=88)
+        except Exception as exc:
+            debug_log(f"[facebook] thumbnail failed for photo {fbid}: {exc}")
+        if not _fb_is_valid_image(small):
+            debug_log(f"[facebook] no usable thumbnail for photo {fbid}")
+            return
+
+    item.image_url = f"img/fb/{fbid}.jpg"
+    item.thumb_url = f"img/fb/{fbid}-s.jpg"
+    debug_log(f"[facebook] saved local images for photo {fbid}")
 
 
 class FacebookSource(SaleSource):
@@ -1920,6 +2101,59 @@ class FacebookSource(SaleSource):
         debug_log(f"[facebook] parsed {len(items)} item(s) from {event.url}")
         return items
 
+    def finalize_item_images(self, items: List[GalleryItem]) -> None:
+        """Download matched Facebook photos (large + small) to docs/img/fb/."""
+        todo: List[GalleryItem] = [
+            it for it in items if it.match_kind == "caption" and it.media_id
+        ]
+        if not todo:
+            return
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+            ex.map(_fb_save_item_images, todo)
+
+
+class AccessSLSource(FacebookSource):
+    """ACCESS SL Weekend Sales, discovered via its Facebook photo album.
+
+    The album URL rotates every week, so the listing page (access-sl.com/hwsale)
+    is scanned for the "Facebook Album" button and its current media-set link is
+    scraped with the regular FacebookSource machinery.
+    """
+
+    name = "accesssl"
+    ACCESS_PAGE = "https://www.access-sl.com/hwsale"
+    ALBUM_LINK_RE = re.compile(r'href="(https?://(?:www\.)?(?:facebook\.com|fb\.com)/media/set/[^"]*)"')
+
+    def list_event_pages(
+        self,
+        listing_url: str,
+        since_date: Optional[date] = None,
+        max_pages: int = 20,
+    ) -> List[EventPage]:
+        del since_date, max_pages
+        page_url = listing_url or self.ACCESS_PAGE
+        soup = self.fetch(page_url)
+        album_url = ""
+        link = soup.select_one('a[aria-label="Facebook Album"]')
+        if link:
+            album_url = link.get("href") or ""
+        if not album_url:
+            m = self.ALBUM_LINK_RE.search(str(soup))
+            if m:
+                album_url = html.unescape(m.group(1))
+        if not album_url:
+            debug_log(f"[accesssl] no Facebook album link found on {page_url}")
+            return []
+        album_url = urljoin(page_url, album_url)
+        debug_log(f"[accesssl] found album: {album_url}")
+        return [
+            EventPage(
+                title="ACCESS SL Weekend Sales",
+                url=album_url,
+                excerpt="Facebook photo album linked from ACCESS SL",
+            )
+        ]
+
 
 # ---------------------------------------------------------------------------
 # Source registry + dispatch
@@ -1934,6 +2168,7 @@ SOURCES = {
     "wix": WixGallerySource,
     "evoshop": EvoShopSource,
     "facebook": FacebookSource,
+    "accesssl": AccessSLSource,
     "generic": GenericGallerySource,
 }
 
@@ -1956,6 +2191,8 @@ def resolve_source_class(url: str) -> Optional[type]:
         return TildaGallerySource
     if host == "home.evoshopevent.com":
         return EvoShopSource
+    if host == "access-sl.com":
+        return AccessSLSource
     if host == "facebook.com":
         return FacebookSource
     if host == "wixsite.com" or host.endswith(".wixsite.com"):
@@ -2019,7 +2256,7 @@ def find_matches(items: List[GalleryItem], store_list_lower: List[str]) -> List[
     matches: List[GalleryItem] = []
     for it in items:
         if it.match_kind == "caption":
-            if matches_caption_list(it.store_name, store_list_lower):
+            if matches_caption_list(it.match_text or it.store_name, store_list_lower):
                 matches.append(it)
         elif matches_store_list(it.store_name, store_list_lower):
             matches.append(it)
@@ -2176,6 +2413,12 @@ def main() -> None:
             print(f"    ERROR fetching event page: {e}", file=sys.stderr)
             continue
 
+        sale_day = sale_day_for_event(event)
+        matched_at = datetime.now().date().isoformat()
+        for item in items:
+            item.sale_day = sale_day
+            item.matched_at = matched_at
+
         debug_log(
             f"[match] '{event.title}': {len(items)} gallery item(s) parsed total"
         )
@@ -2199,6 +2442,16 @@ def main() -> None:
 
         if not event_matches:
             print("    -> 0 matches")
+
+    matched_items: List[GalleryItem] = []
+    seen_ids: set = set()
+    for matches in all_matches:
+        for m in matches:
+            if id(m) not in seen_ids:
+                seen_ids.add(id(m))
+                matched_items.append(m)
+    if matched_items:
+        source.finalize_item_images(matched_items)
 
     for idx, out_path in enumerate(out_paths):
         out_path.parent.mkdir(parents=True, exist_ok=True)

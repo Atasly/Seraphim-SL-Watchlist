@@ -68,6 +68,7 @@ Insanya
 kunst
 [ kunst ]
 Kaithleen
+Kaithleen's
 Killjoy
 Kururu
 kuni
@@ -93,6 +94,9 @@ Mewsery
 Nyaru
 Normandy
 Nefekalum
+No.Match
+No Match
+NoMatch
 
 # O
 Oushk
@@ -121,6 +125,8 @@ Sour
 Suravi
 
 # T
+The DeadBoy
+DeadBoy
 Tardfish.
 Tardfish
 Forge
