@@ -764,9 +764,8 @@ def render_flat_grid(matches: List[dict], tab: int) -> tuple:
     flat: List[dict] = []
     for store in ordered:
         flat.extend(by_store[store])
-    # Stable order: sale day first (undefined days last), then store name.
-    day_rank = {"friday": 0, "saturday": 1, "sunday": 2}
-    flat.sort(key=lambda it: (day_rank.get(it.get("sale_day", ""), 3), it.get("store_name", "").lower()))
+    # Stable order: store name only, so the "All" view reads alphabetically.
+    flat.sort(key=lambda it: it.get("store_name", "").lower())
     cards = "\n".join(render_card(it, i, tab) for i, it in enumerate(flat))
     items = [
         {
