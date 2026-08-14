@@ -2414,7 +2414,7 @@ def main() -> None:
             continue
 
         sale_day = sale_day_for_event(event)
-        matched_at = datetime.now().date().isoformat()
+        matched_at = datetime.now().isoformat(timespec="seconds")
         for item in items:
             item.sale_day = sale_day
             item.matched_at = matched_at

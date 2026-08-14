@@ -729,6 +729,7 @@ def render_card(item: dict, index: int, tab: int) -> str:
 
     thumb = resolve_item_image(item, "thumb_url") or img
     day = htmlmod.escape(item.get("sale_day", ""))
+    run = htmlmod.escape(item.get("matched_at", ""))
 
     if img:
         anchor = (
@@ -741,7 +742,7 @@ def render_card(item: dict, index: int, tab: int) -> str:
         anchor = f'<div class="card-noimg"><span>{initial}</span></div>'
 
     return f"""
-    <div class="card" data-day="{day}">
+    <div class="card" data-day="{day}" data-run="{run}">
       {anchor}
       <div class="card-body">
         <p class="card-title">{store}</p>
@@ -749,6 +750,13 @@ def render_card(item: dict, index: int, tab: int) -> str:
         {caption_html}
       </div>
     </div>"""
+
+
+def _run_label(run: str) -> str:
+    try:
+        return datetime.fromisoformat(run).strftime("%b %d %H:%M")
+    except (TypeError, ValueError):
+        return run
 
 
 def render_flat_grid(matches: List[dict], tab: int) -> tuple:
@@ -776,6 +784,7 @@ def render_flat_grid(matches: List[dict], tab: int) -> tuple:
             "event_title": it.get("source_event_title", ""),
             "slurl": it.get("slurl") or extract_slurl(it.get("caption_html", "")),
             "day": it.get("sale_day", ""),
+            "run": it.get("matched_at", ""),
         }
         for it in flat
     ]
@@ -882,27 +891,27 @@ def render_page(
             + "\n</nav>"
         )
 
-    # Day-bar counts reflect the active category tab, so the initial render
+    # Run-bar counts reflect the active category tab, so the initial render
     # (tab 0) seeds the chips; JS recomputes them when the tab changes.
     first_tab_items = tabs_data[0]["items"] if tabs_data else []
     all_total = len(first_tab_items)
-    day_counts = {"friday": 0, "saturday": 0, "sunday": 0}
+    run_counts: Dict[str, int] = {}
     for it in first_tab_items:
-        day = it.get("day") or ""
-        if day in day_counts:
-            day_counts[day] += 1
+        run = it.get("run") or ""
+        if run:
+            run_counts[run] = run_counts.get(run, 0) + 1
     daybar_html = ""
-    if sum(day_counts.values()):
+    if run_counts:
         rows = [("all", "All", all_total)] + [
-            (day, day.title(), day_counts[day])
-            for day in ("friday", "saturday", "sunday")
+            (run, _run_label(run), run_counts[run])
+            for run in sorted(run_counts)  # oldest run first
         ]
         daybar_html = (
             '<nav class="daybar" id="daybar">\n'
             + "\n".join(
-                f'  <button class="chip{" active" if day == "all" else ""}" '
-                f'data-day="{day}">{label} <span class="chip-count">{n}</span></button>'
-                for day, label, n in rows
+                f'  <button class="chip{" active" if run == "all" else ""}" '
+                f'data-run="{run}">{label} <span class="chip-count">{n}</span></button>'
+                for run, label, n in rows
             )
             + "\n</nav>"
         )
@@ -970,19 +979,19 @@ const TABS = {tabs_json};
   let curTab = 0;
   let curIdx = -1;
   let loadSeq = 0;
-  let activeDay = 'all';
+  let activeRun = 'all';
 
   function items(t) {{ return TABS[t] ? TABS[t].items : []; }}
 
-  function dayMatches(day) {{
-    return activeDay === 'all' || day === activeDay;
+  function runMatches(run) {{
+    return activeRun === 'all' || run === activeRun;
   }}
 
   function visibleIndices(tab) {{
     const list = items(tab);
     const out = [];
     for (let i = 0; i < list.length; i++) {{
-      if (dayMatches(list[i].day)) out.push(i);
+      if (runMatches(list[i].run)) out.push(i);
     }}
     return out;
   }}
@@ -1058,7 +1067,7 @@ const TABS = {tabs_json};
     let visible = 0;
     const storeSet = new Set();
     document.querySelectorAll('.card').forEach(function (card) {{
-      const ok = dayMatches(card.dataset.day || '');
+      const ok = runMatches(card.dataset.run || '');
       card.classList.toggle('hidden', !ok);
       if (ok) {{
         visible++;
@@ -1072,18 +1081,18 @@ const TABS = {tabs_json};
     }}
   }}
 
-  function updateDayCounts() {{
+  function updateRunCounts() {{
     const list = items(curTab);
-    const counts = {{ friday: 0, saturday: 0, sunday: 0 }};
+    const counts = {{}};
     for (let i = 0; i < list.length; i++) {{
-      const d = list[i].day;
-      if (counts[d] !== undefined) counts[d]++;
+      const r = list[i].run;
+      if (r) counts[r] = (counts[r] || 0) + 1;
     }}
     const daybar = document.getElementById('daybar');
     if (!daybar) return;
     daybar.querySelectorAll('.chip').forEach(function (chip) {{
-      const d = chip.dataset.day;
-      const n = d === 'all' ? list.length : (counts[d] || 0);
+      const r = chip.dataset.run;
+      const n = r === 'all' ? list.length : (counts[r] || 0);
       const span = chip.querySelector('.chip-count');
       if (span) span.textContent = n;
     }});
@@ -1100,7 +1109,7 @@ const TABS = {tabs_json};
     }});
     const daybar = document.getElementById('daybar');
     if (daybar) daybar.hidden = document.querySelector('.tab-panel[data-active] .card') == null;
-    updateDayCounts();
+    updateRunCounts();
     applyFilter();
   }}
 
@@ -1125,7 +1134,7 @@ const TABS = {tabs_json};
   if (daybar) {{
     daybar.querySelectorAll('.chip').forEach(function (chip) {{
       chip.addEventListener('click', function () {{
-        activeDay = chip.dataset.day;
+        activeRun = chip.dataset.run;
         daybar.querySelectorAll('.chip').forEach(function (c) {{
           c.classList.toggle('active', c === chip);
         }});

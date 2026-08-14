@@ -21,8 +21,10 @@ Effervescence
 # F
 
 # G
+Ghoul
 
 # H
+Happy Undead
 Hysteria
 HimeDream
 Hime*Dream
@@ -31,6 +33,7 @@ Hime*Dream
 
 # K
 Kiru
+Kottr
 
 # L
 Lunafell
@@ -39,11 +42,14 @@ Lunafell
 Moon Rabbit
 Moon Elixir
 M.mie
+Miwas
+miso
 
 # N
 
 # O
 Oracle
+Orlaith Velvet
 
 # P
 
@@ -73,6 +79,7 @@ Violent seduction
 # W
 
 # X
+Xolty
 
 # Y
 Yaya

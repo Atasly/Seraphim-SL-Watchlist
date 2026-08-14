@@ -49,7 +49,7 @@ def load_json(path: Path) -> list:
 
 def parse_day(matched_at: str) -> Optional[datetime]:
     try:
-        return datetime.strptime(matched_at, "%Y-%m-%d")
+        return datetime.fromisoformat(matched_at)
     except (TypeError, ValueError):
         return None
 
@@ -68,7 +68,7 @@ def consolidate(
 
     for item in prev:
         if not item.get("matched_at"):
-            item["matched_at"] = now.strftime("%Y-%m-%d")
+            item["matched_at"] = now.isoformat(timespec="seconds")
         if not item.get("sale_day"):
             item["sale_day"] = ""
 
@@ -80,7 +80,7 @@ def consolidate(
 
     merged: List[dict] = list(prev)
     seen_keys = set(prev_keys)
-    today = now.strftime("%Y-%m-%d")
+    run_stamp = now.isoformat(timespec="seconds")
 
     for item in list(fresh) + list(access):
         store = (item.get("store_name") or "").strip().lower()
@@ -94,7 +94,7 @@ def consolidate(
             continue
         seen_keys.add(key)
         if not item.get("matched_at"):
-            item["matched_at"] = today
+            item["matched_at"] = run_stamp
         if not item.get("sale_day"):
             item["sale_day"] = ""
         merged.append(item)
