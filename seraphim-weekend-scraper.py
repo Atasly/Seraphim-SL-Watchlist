@@ -1555,30 +1555,37 @@ class EvoShopSource(SaleSource):
 
             seller_id = entry.get("sellerid")
             item_id = entry.get("itemid")
-            images = [entry.get(f) for f in ("image1", "image2", "image3") if entry.get(f)]
 
-            for image_name in images:
-                if seller_id and item_id:
-                    image_url = (
-                        f"{self.IMAGE_BASE}admin/creatorfilesweekend/"
-                        f"{seller_id}/{item_id}/{image_name}"
-                    )
-                else:
-                    image_url = urljoin(event.url, image_name)
+            image_name = ""
+            for field in ("image1", "image2", "image3"):
+                value = entry.get(field) or ""
+                if value and ".." not in value:
+                    image_name = value
+                    break
+            if not image_name:
+                continue
 
-                caption = ""
-                if entry.get("storelocation"):
-                    caption = (
-                        f'<a href="{entry["storelocation"]}" target="_blank">'
-                        "Visit store</a>"
-                    )
-                items.append(
-                    GalleryItem(
-                        store_name=store_name,
-                        image_url=image_url,
-                        caption_html=caption,
-                    )
+            if seller_id and item_id:
+                image_url = (
+                    f"{self.IMAGE_BASE}admin/creatorfilesweekend/"
+                    f"{seller_id}/{item_id}/{image_name}"
                 )
+            else:
+                image_url = urljoin(event.url, image_name)
+
+            caption = ""
+            if entry.get("storelocation"):
+                caption = (
+                    f'<a href="{entry["storelocation"]}" target="_blank">'
+                    "Visit store</a>"
+                )
+            items.append(
+                GalleryItem(
+                    store_name=store_name,
+                    image_url=image_url,
+                    caption_html=caption,
+                )
+            )
 
         for item in items:
             item.source_event_title = event.title
@@ -2404,6 +2411,7 @@ def main() -> None:
 
     all_matches: List[List[GalleryItem]] = [[] for _ in store_lists]
 
+    matched_at = datetime.now().isoformat(timespec="seconds")
     for event in events:
         print(f"  Parsing: {event.title} ({event.url})")
 
@@ -2414,7 +2422,6 @@ def main() -> None:
             continue
 
         sale_day = sale_day_for_event(event)
-        matched_at = datetime.now().isoformat(timespec="seconds")
         for item in items:
             item.sale_day = sale_day
             item.matched_at = matched_at
