@@ -8,6 +8,7 @@ Aurun
 # B
 Bipolar
 Bonnie
+Bailizhi
 
 # C
 
@@ -17,8 +18,6 @@ Ducky
 
 # E
 Effervescence
-
-# F
 
 # G
 Ghoul
@@ -30,10 +29,12 @@ HimeDream
 Hime*Dream
 
 # I
+Inori
 
 # K
 Kiru
 Kottr
+Kururu
 
 # L
 Lunafell
@@ -44,6 +45,7 @@ Moon Elixir
 M.mie
 Miwas
 miso
+MDN
 
 # N
 

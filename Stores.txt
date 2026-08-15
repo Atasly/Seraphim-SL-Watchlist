@@ -12,6 +12,7 @@ Azoury
 Antaya
 Arkhive
 Ascent
+Arana
 
 # B
 Badwolf
@@ -70,7 +71,6 @@ kunst
 Kaithleen
 Kaithleen's
 Killjoy
-Kururu
 kuni
 
 # L
@@ -135,6 +135,7 @@ Top1salon
 Tentacio
 Truth
 Tres Beau
+Tenebre
 
 # U
 Una
@@ -149,13 +150,16 @@ Violetility
 Vae victis
 Verboten
 Vermillion
+violetta
 
 # W
 Wraith
 Wretch
 Wasabi
+Wingsdg
 
 # X
 Xiuxiu
 
-# Y
+# Z
+Zao

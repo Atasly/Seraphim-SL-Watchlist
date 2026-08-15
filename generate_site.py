@@ -38,6 +38,16 @@ from urllib.parse import quote
 DEFAULT_INPUT = Path(__file__).parent / "matches.json"
 DEFAULT_OUTPUT = Path(__file__).parent / "docs" / "index.html"
 
+# Per-tab tag line shown above the summary counts in the page header.
+# Keyed by the tab label (--tab-label). The active tab's tag is shown.
+# TODO: replace each TODO below with a short description of what the
+# category contains (e.g. what "single" means for your watchlist).
+TAB_TAGS = {
+    "single": "Where individual weekend sales are (mostly) mod.",
+    "fatpack": "Where fatpacks, on weekend sales or not, are (mostly) mod.",
+    "build": "Weekend sales focusing on stores with furnitures/building resources",
+}
+
 FB_LOOKASIDE_URL = "https://lookaside.fbsbx.com/lookaside/crawler/media/?media_id={}"
 _IMAGE_MAGIC = (b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n", b"RIFF")
 _DOCS_DIR = DEFAULT_OUTPUT.parent
@@ -183,6 +193,10 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 6px 16px;
+}
+.summary-tag {
+  font-weight: 600;
+  color: var(--accent);
 }
 
 .tabs {
@@ -865,7 +879,9 @@ def render_page(
         #count = f'<div class="tab-count">{len(items)} match(es) across {len({i["store"] for i in items})} store(s)</div>'
         active = ' data-active=""' if t == 0 else ''
         panels.append(f'<div class="tab-panel" id="tab-{t}"{active}>{body}</div>')
-        tabs_data.append({"label": label, "items": items})
+        tabs_data.append(
+            {"label": label, "items": items, "tag": TAB_TAGS.get(label, "")}
+        )
 
     store_tab = len(tabs)
     if store_sets:
@@ -917,6 +933,16 @@ def render_page(
         )
 
     now = datetime.now().strftime("%B %d, %Y, %H:%M")
+
+    tag0 = tabs_data[0].get("tag", "") if tabs_data else ""
+    if tag0:
+        tag_html = (
+            f'<span class="summary-tag" id="summary-tag">'
+            f"{htmlmod.escape(tag0)}</span> &middot; "
+        )
+    else:
+        tag_html = '<span class="summary-tag" id="summary-tag"></span>'
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -946,6 +972,7 @@ def render_page(
 {daybar_html}
 
 <div class="summary wrap"><span class="pill">
+  {tag_html}
   {total} match(es) across {total_stores} store(s)
   &middot; sorted by store
   &middot; generated {now}
@@ -1109,6 +1136,8 @@ const TABS = {tabs_json};
     }});
     const daybar = document.getElementById('daybar');
     if (daybar) daybar.hidden = document.querySelector('.tab-panel[data-active] .card') == null;
+    const tagEl = document.getElementById('summary-tag');
+    if (tagEl) tagEl.textContent = (TABS[t] && TABS[t].tag) || '';
     updateRunCounts();
     applyFilter();
   }}
