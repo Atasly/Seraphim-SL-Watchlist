@@ -11,6 +11,7 @@ It is getting painful to trudge through the sea of AI slop pictures cropping mor
 For those interested in modding outfits, so many weekend sales end up cluttering the search with their no mod permissions.
 This is a tool that aims to help against that.
 
+This work is not afiliated with SeraphimSL.
 All credits go to [SeraphimSL](https://www.seraphimsl.com/) team for their invaluable work.
 Without their presence and their work, this tool wouldn't function at all.
 

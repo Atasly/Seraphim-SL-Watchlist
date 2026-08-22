@@ -1,0 +1,29 @@
+# One event name per line. Case doesn't matter, lines starting with # are ignored.
+# Syndicate
+Camp Syndicate
+Midnight Order
+Engine Room
+Salvage Station
+Night Market Collective
+
+# Asian
+Neo Tokyo
+#NeoTokyo
+Appare
+Kawaii Secrets
+Cyber Fair
+#CyberFair
+
+# FLF
+FLF Bday Bash
+# FLF Bash
+
+# Kinky
+Kinky Monthly
+Lewd Station
+Fetish Fair
+#FetishFair
+
+The Warehouse
+Abnormality
+Fantasy Faire

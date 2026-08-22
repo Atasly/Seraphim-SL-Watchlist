@@ -146,6 +146,19 @@ def load_store_list(path: Path = STORE_LIST_FILE) -> List[str]:
     return names
 
 
+def load_event_names(path: Path) -> List[tuple]:
+    """Load tracked event names as (display, lower) alias pairs."""
+    if not path.exists():
+        return []
+
+    names = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            names.append((line, line.lower()))
+    return names
+
+
 # ---------------------------------------------------------------------------
 # Date helpers
 # ---------------------------------------------------------------------------
@@ -217,11 +230,25 @@ _EVENT_OPENING_DATE_RE = re.compile(
     re.IGNORECASE,
 )
 
+_EVENT_CLOSING_DATE_RE = re.compile(
+    r"(?:Event Closing Date|End Date):\s*([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})",
+    re.IGNORECASE,
+)
+
 
 def extract_event_opening_date(text: str) -> str:
     """Pull 'Event Opening Date: August 8, 2026' out of an excerpt."""
     match = _EVENT_OPENING_DATE_RE.search(text)
     return match.group(1) if match else ""
+
+
+def extract_event_closing_date(text: str) -> str:
+    """Pull 'Event Closing Date:/End Date:' out of an excerpt as ISO date."""
+    match = _EVENT_CLOSING_DATE_RE.search(text or "")
+    if not match:
+        return ""
+    parsed = parse_post_date(match.group(1))
+    return parsed.isoformat() if parsed else ""
 
 
 def name_from_image_url(url: str) -> str:
@@ -537,6 +564,50 @@ class SeraphimSource(SaleSource):
             if stop or (declared_total and page_num >= declared_total):
                 break
 
+        return events
+
+    def list_recent_posts(
+        self, since_date: Optional[date] = None, max_pages: int = 10
+    ) -> List[EventPage]:
+        """All recent posts from the WordPress REST feed (no category filter).
+
+        The homepage feed modules only cover their own categories; event
+        announcements often live outside them. This scan pages the global
+        feed (newest first) until a post is older than ``since_date``.
+        """
+        base = "https://www.seraphimsl.com/wp-json/wp/v2/posts"
+        events: List[EventPage] = []
+        for page_num in range(1, max_pages + 1):
+            rest_url = (
+                f"{base}?per_page=100&orderby=date&order=desc&page={page_num}"
+            )
+            rest_url = cache_bust_url(rest_url)
+            try:
+                resp = self.session.get(rest_url, timeout=REQUEST_TIMEOUT)
+                resp.raise_for_status()
+                posts = resp.json()
+            except (requests.RequestException, ValueError) as exc:
+                debug_log(f"[events] REST fetch failed ({rest_url}): {exc}")
+                break
+            if not isinstance(posts, list) or not posts:
+                break
+            stop = False
+            for post in posts:
+                event = self._event_from_rest_post(post)
+                if event is None:
+                    continue
+                post_day = (post.get("date") or "")[:10]
+                try:
+                    posted = date.fromisoformat(post_day) if post_day else None
+                except ValueError:
+                    posted = None
+                if since_date is not None and posted is not None and posted < since_date:
+                    stop = True
+                    break
+                events.append(event)
+            if stop:
+                break
+        debug_log(f"[events] recent-post scan: {len(events)} post(s)")
         return events
 
     @staticmethod
@@ -2270,6 +2341,32 @@ def find_matches(items: List[GalleryItem], store_list_lower: List[str]) -> List[
     return matches
 
 
+def find_event_matches(posts: List[EventPage], event_names: List[tuple]) -> List[dict]:
+    """Match tracked event names against recent post titles/excerpts.
+
+    A name matches on word boundaries, so 'Appare' also matches 'Appare!'
+    but not 'Apparel'. Returns one dict per matching post; the first alias
+    in file order wins. The closing date comes from the excerpt when present.
+    """
+    matches: List[dict] = []
+    for ev in posts:
+        hay = f"{ev.title} {ev.excerpt}".lower()
+        for display, lower in event_names:
+            if re.search(rf"(?<!\w){re.escape(lower)}(?!\w)", hay):
+                posted = parse_post_date(ev.posted_date)
+                matches.append(
+                    {
+                        "event_name": display,
+                        "title": ev.title,
+                        "url": ev.url,
+                        "posted_date": posted.isoformat() if posted else ev.posted_date,
+                        "closing_date": extract_event_closing_date(ev.excerpt),
+                    }
+                )
+                break
+    return matches
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -2342,6 +2439,24 @@ def main() -> None:
         default=20,
         help="Maximum listing pages for paginated sources.",
     )
+    parser.add_argument(
+        "--events-file",
+        default=None,
+        help="Path to a tracked-events name list (one per line). Enables the "
+        "event-tracking pass.",
+    )
+    parser.add_argument(
+        "--events-output",
+        default=None,
+        help="Where to write the tracked-event snapshot (required with "
+        "--events-file).",
+    )
+    parser.add_argument(
+        "--events-since-days",
+        type=int,
+        default=21,
+        help="How many days back the event pass scans for announcements.",
+    )
     args = parser.parse_args()
 
     if args.category_page:
@@ -2411,7 +2526,7 @@ def main() -> None:
 
     all_matches: List[List[GalleryItem]] = [[] for _ in store_lists]
 
-    matched_at = datetime.now().isoformat(timespec="seconds")
+    matched_at = datetime.now().astimezone().isoformat(timespec="seconds")
     for event in events:
         print(f"  Parsing: {event.title} ({event.url})")
 
@@ -2471,6 +2586,37 @@ def main() -> None:
             encoding="utf-8",
         )
         print(f"Wrote {len(all_matches[idx])} match(es) to {out_path}")
+
+    if args.events_file:
+        if not args.events_output:
+            print(
+                "ERROR: --events-output is required with --events-file.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        events_path = Path(args.events_file)
+        event_names = load_event_names(events_path)
+        if not event_names:
+            print(f"WARNING: no event names loaded from {events_path}.")
+        events_since = datetime.now().date() - timedelta(days=args.events_since_days)
+        print(f"Events: scanning recent posts since {events_since}")
+        try:
+            recent_posts = source.list_recent_posts(
+                since_date=events_since, max_pages=args.max_pages
+            )
+        except requests.RequestException as e:
+            print(f"ERROR fetching recent posts: {e}", file=sys.stderr)
+            sys.exit(1)
+        tracked = find_event_matches(recent_posts, event_names)
+        for entry in tracked:
+            entry["first_seen"] = matched_at
+        out_events = Path(args.events_output)
+        out_events.parent.mkdir(parents=True, exist_ok=True)
+        out_events.write_text(
+            json.dumps(tracked, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        print(f"Wrote {len(tracked)} tracked event(s) to {out_events}")
 
 
 if __name__ == "__main__":

@@ -60,15 +60,15 @@ def consolidate(
     """Merge fresh + access snapshots into the persistent list.
 
     - Items already present (same store+image) are kept as-is.
-    - Stores already present never get new/updated items (use the old one only).
-    - New stores get every one of their items appended.
+    - New (store, image) pairs are appended, so a store may appear once per
+      distinct event image (every sale event is kept).
     - Items older than keep_days expire.
     """
     cutoff = (now - timedelta(days=keep_days)).date()
 
     for item in prev:
         if not item.get("matched_at"):
-            item["matched_at"] = now.isoformat(timespec="seconds")
+            item["matched_at"] = now.astimezone().isoformat(timespec="seconds")
         if not item.get("sale_day"):
             item["sale_day"] = ""
 
@@ -76,11 +76,10 @@ def consolidate(
         ((item.get("store_name") or "").strip().lower(), item.get("image_url") or "")
         for item in prev
     }
-    prev_stores = {(item.get("store_name") or "").strip().lower() for item in prev}
 
     merged: List[dict] = list(prev)
     seen_keys = set(prev_keys)
-    run_stamp = now.isoformat(timespec="seconds")
+    run_stamp = now.astimezone().isoformat(timespec="seconds")
 
     for item in list(fresh) + list(access):
         store = (item.get("store_name") or "").strip().lower()
@@ -89,8 +88,6 @@ def consolidate(
             continue
         key = (store, img)
         if key in seen_keys:
-            continue
-        if store in prev_stores:
             continue
         seen_keys.add(key)
         if not item.get("matched_at"):
@@ -107,6 +104,64 @@ def consolidate(
         if day.date() >= cutoff:
             kept.append(item)
     return kept
+
+
+def consolidate_events(prev: List[dict], fresh: List[dict], now: datetime) -> List[dict]:
+    """Merge tracked event announcements across runs.
+
+    Keyed by post URL:
+    - Active entries are refreshed from the fresh snapshot.
+    - Active entries whose closing date has passed (or undated entries no
+      longer seen in the scan) get status "ended" and stay listed for one
+      rebuild as an expiry mention.
+    - Entries already marked ended are removed on this (the next) run.
+    - Brand-new posts whose closing date already passed are ignored, so
+      stale announcements never enter tracking.
+    """
+    today = now.date()
+    run_stamp = now.astimezone().isoformat(timespec="seconds")
+    fresh_by_url = {e.get("url"): e for e in fresh if e.get("url")}
+
+    merged: List[dict] = []
+    purged = 0
+    for entry in prev:
+        if entry.get("status") == "ended":
+            purged += 1
+            continue
+        f = fresh_by_url.pop(entry.get("url"), None)
+        if f:
+            for k in ("event_name", "title", "posted_date", "closing_date"):
+                if f.get(k):
+                    entry[k] = f[k]
+            entry["first_seen"] = entry.get("first_seen") or f.get("first_seen") or ""
+        closing = parse_day(entry.get("closing_date")) if entry.get("closing_date") else None
+        expired = (closing is not None and closing.date() < today) or (
+            closing is None and f is None
+        )
+        if expired:
+            entry["status"] = "ended"
+            entry["ended_at"] = run_stamp
+        else:
+            entry["status"] = "active"
+        merged.append(entry)
+
+    added = 0
+    for f in fresh_by_url.values():
+        closing = parse_day(f["closing_date"]) if f.get("closing_date") else None
+        if closing is not None and closing.date() < today:
+            continue
+        f.setdefault("first_seen", run_stamp)
+        f["status"] = "active"
+        f.setdefault("ended_at", "")
+        merged.append(f)
+        added += 1
+
+    ended = sum(1 for e in merged if e.get("status") == "ended")
+    print(
+        f"  events: {len(prev)} -> {len(merged)} "
+        f"({added} new, {ended} ended, {purged} purged)"
+    )
+    return merged
 
 
 def cleanup_images(images_dir: Path, keep_days: int) -> None:
@@ -156,6 +211,16 @@ def main() -> None:
         help="ACCESS SL snapshot to append (same order as --main; optional).",
     )
     parser.add_argument("--keep-days", type=int, default=4)
+    parser.add_argument(
+        "--events-main",
+        metavar="PATH",
+        help="Persistent tracked-events file (with --events-fresh).",
+    )
+    parser.add_argument(
+        "--events-fresh",
+        metavar="PATH",
+        help="Fresh tracked-event snapshot to merge (required with --events-main).",
+    )
     parser.add_argument(
         "--root",
         default=str(ROOT),
@@ -216,6 +281,28 @@ def main() -> None:
 
     if not args.no_cleanup:
         cleanup_images(images_dir, args.keep_days)
+
+    if args.events_main or args.events_fresh:
+        if not (args.events_main and args.events_fresh):
+            print(
+                "ERROR: --events-main and --events-fresh must be used together.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        events_main = root / args.events_main
+        events_fresh = root / args.events_fresh
+        prev_events = load_json(events_main)
+        fresh_events = load_json(events_fresh)
+        merged_events = consolidate_events(prev_events, fresh_events, now)
+        events_main.write_text(
+            json.dumps(merged_events, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        if events_fresh.exists():
+            try:
+                events_fresh.unlink()
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":

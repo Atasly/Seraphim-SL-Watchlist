@@ -30,7 +30,7 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 from urllib.parse import quote
@@ -344,6 +344,96 @@ a:hover { text-decoration: underline; }
   padding: 2.5px 0;
   color: var(--text);
   opacity: .9;
+}
+
+.events-count {
+  margin: 2px 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  color: var(--muted);
+}
+.event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 26px;
+}
+.event-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  color: inherit;
+  transition: border-color .15s;
+}
+.event-row:hover { border-color: var(--border-strong); }
+.event-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.event-badge.active {
+  background: rgba(74, 222, 128, .12);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, .35);
+}
+.event-badge.ended {
+  background: var(--panel2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.event-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.event-title {
+  font-size: 13px;
+  color: var(--text);
+  opacity: .92;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.event-dates {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .event-dates { margin-left: 0; }
+}
+.event-directory {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 0 26px;
+}
+.event-chip {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  padding: 4px 11px;
+  border-radius: 20px;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.event-chip.active {
+  background: rgba(74, 222, 128, .12);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, .35);
 }
 
 .store-items {
@@ -857,16 +947,136 @@ def render_stores_panel(store_sets: List[tuple], tab: int, title: str = "Stores 
     )
 
 
+def _fmt_event_range(posted: str, closing: str) -> str:
+    """'Aug 14 – Aug 23, 2026' style range from date strings (best effort)."""
+    def parse(v):
+        if not v:
+            return None
+        try:
+            return datetime.fromisoformat(v).date()
+        except (TypeError, ValueError):
+            pass
+        for fmt in ("%B %d, %Y", "%b %d, %Y"):
+            try:
+                return datetime.strptime(v.strip(), fmt).date()
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    o, c = parse(posted), parse(closing)
+    if c is None and o is None:
+        return ""
+    if c is None:
+        return f"since {o:%b %d, %Y}"
+    if o is None or o.year != c.year:
+        return f"{c:%b %d, %Y}"
+    if o == c:
+        return f"{c:%b %d, %Y}"
+    return f"{o:%b %d} \u2013 {c:%b %d, %Y}"
+
+
+def render_events_panel(events: List[dict], tab: int, event_names: List[str] = None) -> str:
+    """Render the tracked-events panel.
+
+    Deliberately avoids .card/.tab-count class names so the run-filter
+    script (which toggles those globally) cannot touch event rows.
+    When `event_names` is provided, a 'Watched events' directory listing
+    every watched name (active chips carry the closing date) is appended.
+    """
+    today = datetime.now().date()
+
+    def closing_of(ev: dict):
+        try:
+            return datetime.fromisoformat(ev.get("closing_date") or "").date()
+        except (TypeError, ValueError):
+            return None
+
+    def is_ended(ev: dict) -> bool:
+        closing = closing_of(ev)
+        return ev.get("status") == "ended" or (closing is not None and closing < today)
+
+    active = sorted(
+        (ev for ev in events if not is_ended(ev)),
+        key=lambda ev: (closing_of(ev) is None, closing_of(ev) or today),
+    )
+    ended = sorted(
+        (ev for ev in events if is_ended(ev)),
+        key=lambda ev: closing_of(ev) or today,
+        reverse=True,
+    )
+
+    rows_html = []
+    for ev, is_end in [(e, False) for e in active] + [(e, True) for e in ended]:
+        name = htmlmod.escape(ev.get("event_name") or "?")
+        title = htmlmod.escape(ev.get("title") or "")
+        url = htmlmod.escape(ev.get("url") or "", quote=True)
+        dates = _fmt_event_range(ev.get("posted_date"), ev.get("closing_date"))
+        badge = "ended" if is_end else "active"
+        label = "Ended" if is_end else "Active"
+        rows_html.append(
+            f'    <a class="event-row" href="{url}" target="_blank" rel="noopener">\n'
+            f'      <span class="event-badge {badge}">{label}</span>\n'
+            f'      <span class="event-name">{name}</span>\n'
+            f'      <span class="event-title">{title}</span>\n'
+            f'      <span class="event-dates">{htmlmod.escape(dates)}</span>\n'
+            f"    </a>"
+        )
+
+    body = "\n".join(rows_html) if rows_html else (
+        '    <div class="empty"><p>No tracked events right now.</p></div>'
+    )
+
+    directory_html = ""
+    if event_names:
+        active_until = {}
+        for ev in active:
+            name = (ev.get("event_name") or "").strip().lower()
+            closing = closing_of(ev)
+            if name and closing and (name not in active_until or closing > active_until[name]):
+                active_until[name] = closing
+        chips_html = []
+        for name in sorted(event_names, key=lambda n: n.lower()):
+            display = htmlmod.escape(name)
+            closing = active_until.get(name.strip().lower())
+            if closing:
+                chips_html.append(
+                    f'<span class="event-chip active">{display} &middot; until {closing:%b %d}</span>'
+                )
+            else:
+                chips_html.append(f'<span class="event-chip">{display}</span>')
+        directory_html = (
+            f'\n  <h3 class="store-set-label">Watched events</h3>\n'
+            f'  <div class="event-directory">\n'
+            f'    {" ".join(chips_html)}\n'
+            f"  </div>"
+        )
+
+    return (
+        f'<div class="tab-panel" id="tab-{tab}">\n'
+        f'  <h2 class="stores-title">Tracked events</h2>\n'
+        f'  <div class="events-count">{len(active)} active &middot; '
+        f"{len(ended)} ended</div>\n"
+        f'  <div class="event-list">\n{body}\n  </div>'
+        f"{directory_html}\n"
+        f"</div>"
+    )
+
+
 def render_page(
     tabs: List[tuple],
     title: str,
     store_sets: List[tuple] = (),
     stores_label: str = "Watchlist",
+    events: List[dict] = None,
+    events_label: str = "Events",
+    event_names: List[str] = None,
 ) -> str:
     """Render the page. `tabs` is a list of (label, matches) tuples.
 
-    When `store_sets` is non-empty, a right-aligned tab (labelled `stores_label`)
-    listing the watchlist directories is appended after the match tabs.
+    When `events` is non-empty, a tab (labelled `events_label`) listing the
+    tracked events is inserted after the match tabs. When `store_sets` is
+    non-empty, a right-aligned tab (labelled `stores_label`) listing the
+    watchlist directories is appended last.
     """
     panels = []
     tabs_data: List[dict] = []
@@ -883,12 +1093,17 @@ def render_page(
             {"label": label, "items": items, "tag": TAB_TAGS.get(label, "")}
         )
 
-    store_tab = len(tabs)
+    events_tab = None
+    if events is not None:
+        events_tab = len(tabs)
+        panels.append(render_events_panel(events, events_tab, event_names or []))
+
+    store_tab = len(tabs) + (1 if events is not None else 0)
     if store_sets:
         panels.append(render_stores_panel(store_sets, store_tab))
 
     tabs_json = json.dumps(tabs_data, ensure_ascii=False).replace("<", "\\u003c")
-    button_count = len(tabs) + (1 if store_sets else 0)
+    button_count = len(tabs) + (1 if store_sets else 0) + (1 if events is not None else 0)
     tabs_html = ""
     if button_count > 1:
         buttons = [
@@ -896,10 +1111,19 @@ def render_page(
             f'{htmlmod.escape(label)}</button>'
             for t, (label, _) in enumerate(tabs)
         ]
+        # Right-aligned group: the FIRST right button carries margin-left:auto
+        # (pushing itself and everything after it to the far edge); any further
+        # ones must sit adjacent, or flexbox would distribute the free space
+        # between them.
+        right_side = []
+        if events is not None:
+            right_side.append((events_tab, events_label))
         if store_sets:
+            right_side.append((store_tab, stores_label))
+        for i, (tab_idx, tab_label) in enumerate(right_side):
             buttons.append(
-                f'  <button class="tab-btn right" data-tab="{store_tab}">'
-                f'{htmlmod.escape(stores_label)}</button>'
+                f'  <button class="tab-btn{" right" if i == 0 else ""}" '
+                f'data-tab="{tab_idx}">{htmlmod.escape(tab_label)}</button>'
             )
         tabs_html = (
             '<nav class="tabs" id="tabs">\n'
@@ -926,13 +1150,13 @@ def render_page(
             '<nav class="daybar" id="daybar">\n'
             + "\n".join(
                 f'  <button class="chip{" active" if run == "all" else ""}" '
-                f'data-run="{run}">{label} <span class="chip-count">{n}</span></button>'
+                f'data-run="{run}"><span class="chip-label">{label}</span> <span class="chip-count">{n}</span></button>'
                 for run, label, n in rows
             )
             + "\n</nav>"
         )
 
-    now = datetime.now().strftime("%B %d, %Y, %H:%M")
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     tag0 = tabs_data[0].get("tag", "") if tabs_data else ""
     if tag0:
@@ -975,12 +1199,13 @@ def render_page(
   {tag_html}
   {total} match(es) across {total_stores} store(s)
   &middot; sorted by store
-  &middot; generated {now}
+  &middot; generated <time id="generated-at" datetime="{now}"></time>
 </span></div>
 
 <main class="wrap">{''.join(panels)}</main>
 
 <footer class="site-footer">
+  This work is not afiliated with Seraphim. All credits go to [SeraphimSL](https://www.seraphimsl.com/) team for their invaluable work.
   Generated by <a href="https://github.com/Atasly/Seraphim-SL-Watchlist">Seraphim SL Watchlist</a>
 </footer>
 
@@ -1219,6 +1444,29 @@ const TABS = {tabs_json};
   }});
 
   selectTab(0);
+
+  var gen = document.getElementById('generated-at');
+  if (gen) {{
+    var gd = new Date(gen.getAttribute('datetime'));
+    if (!isNaN(gd)) {{
+      gen.textContent = gd.toLocaleString(undefined, {{month:'long', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit', hourCycle:'h23'}});
+    }}
+  }}
+  var fmtChip = function (iso) {{
+    var d = new Date(iso);
+    if (isNaN(d)) return null;
+    return d.toLocaleString(undefined, {{month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', hourCycle:'h23'}});
+  }};
+  var daybar2 = document.getElementById('daybar');
+  if (daybar2) {{
+    daybar2.querySelectorAll('.chip[data-run]').forEach(function (chip) {{
+      if (chip.dataset.run === 'all') return;
+      var lbl = chip.querySelector('.chip-label');
+      if (!lbl) return;
+      var t = fmtChip(chip.dataset.run);
+      if (t) lbl.textContent = t;
+    }});
+  }}
 }})();
 </script>
 </body>
@@ -1254,6 +1502,23 @@ def main() -> None:
         help="Label for the right-aligned stores tab (default: Watchlist).",
     )
     parser.add_argument(
+        "--events-file",
+        default=None,
+        help="Path to a tracked-events JSON (from consolidate_matches.py "
+        "--events-main). Adds an Events tab left of the stores tab.",
+    )
+    parser.add_argument(
+        "--events-label",
+        default="Events",
+        help="Label for the tracked-events tab (default: Events).",
+    )
+    parser.add_argument(
+        "--events-list",
+        default=None,
+        help="Path to the watched-events name list (e.g. Events.txt). Adds a "
+        "'Watched events' directory to the events panel.",
+    )
+    parser.add_argument(
         "--copy-data",
         nargs="?",
         const="",
@@ -1287,10 +1552,38 @@ def main() -> None:
             raise SystemExit(1)
         store_sets.append((store_path.stem.replace("_", " "), parse_store_list(store_path)))
 
+    events = None
+    if args.events_file:
+        events_path = Path(args.events_file)
+        if not events_path.exists():
+            print(f"ERROR: events file not found: {events_path}", file=sys.stderr)
+            raise SystemExit(1)
+        events = json.loads(events_path.read_text(encoding="utf-8"))
+
+    event_names: List[str] = []
+    if args.events_list:
+        list_path = Path(args.events_list)
+        if not list_path.exists():
+            print(f"ERROR: events list not found: {list_path}", file=sys.stderr)
+            raise SystemExit(1)
+        for line in list_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                event_names.append(line)
+
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
-        render_page(tabs, args.title, store_sets, args.stores_label), encoding="utf-8"
+        render_page(
+            tabs,
+            args.title,
+            store_sets,
+            args.stores_label,
+            events,
+            args.events_label,
+            event_names,
+        ),
+        encoding="utf-8",
     )
 
     if args.copy_data is not None:
@@ -1302,8 +1595,10 @@ def main() -> None:
     total = sum(len(m) for _, m in tabs)
     total_stores = len({m.get("store_name") for _, m in tabs for m in m})
     dir_count = sum(len(names) for _, cats in store_sets for names in cats.values())
+    event_count = len(events) if events is not None else 0
     print(f"Wrote {output_path} ({total} matches, {total_stores} stores, "
-          f"{len(tabs) + (1 if store_sets else 0)} tab(s), "
+          f"{len(tabs) + (1 if store_sets else 0) + (1 if events is not None else 0)} tab(s), "
+          f"{event_count} tracked event(s), "
           f"{dir_count} watchlist store(s))")
 
 
