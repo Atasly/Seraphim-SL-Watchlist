@@ -386,6 +386,16 @@ a:hover { text-decoration: underline; }
   color: #4ade80;
   border: 1px solid rgba(74, 222, 128, .35);
 }
+.event-badge.new {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--accent-glow);
+}
+.event-badge.closing {
+  background: rgba(251, 191, 36, .12);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, .4);
+}
 .event-badge.ended {
   background: var(--panel2);
   color: var(--muted);
@@ -947,23 +957,25 @@ def render_stores_panel(store_sets: List[tuple], tab: int, title: str = "Stores 
     )
 
 
+def _parse_loose_date(v):
+    """ISO date first, then common 'Month d, YYYY' shapes; else None."""
+    if not v:
+        return None
+    try:
+        return datetime.fromisoformat(v).date()
+    except (TypeError, ValueError):
+        pass
+    for fmt in ("%B %d, %Y", "%b %d, %Y"):
+        try:
+            return datetime.strptime(v.strip(), fmt).date()
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def _fmt_event_range(posted: str, closing: str) -> str:
     """'Aug 14 – Aug 23, 2026' style range from date strings (best effort)."""
-    def parse(v):
-        if not v:
-            return None
-        try:
-            return datetime.fromisoformat(v).date()
-        except (TypeError, ValueError):
-            pass
-        for fmt in ("%B %d, %Y", "%b %d, %Y"):
-            try:
-                return datetime.strptime(v.strip(), fmt).date()
-            except (TypeError, ValueError):
-                continue
-        return None
-
-    o, c = parse(posted), parse(closing)
+    o, c = _parse_loose_date(posted), _parse_loose_date(closing)
     if c is None and o is None:
         return ""
     if c is None:
@@ -986,10 +998,23 @@ def render_events_panel(events: List[dict], tab: int, event_names: List[str] = N
     today = datetime.now().date()
 
     def closing_of(ev: dict):
-        try:
-            return datetime.fromisoformat(ev.get("closing_date") or "").date()
-        except (TypeError, ValueError):
-            return None
+        return _parse_loose_date(ev.get("closing_date"))
+
+    def badge_for(ev: dict) -> tuple:
+        """(css_class, label) for one event row.
+
+        Active events get 'New' when opened less than 7 days ago, else
+        'Closing' when less than 3 days remain; New wins over Closing.
+        """
+        if is_ended(ev):
+            return ("ended", "Ended")
+        opening = _parse_loose_date(ev.get("posted_date"))
+        closing = closing_of(ev)
+        if opening is not None and (today - opening).days < 7:
+            return ("new", "New")
+        if closing is not None and (closing - today).days < 3:
+            return ("closing", "Closing")
+        return ("active", "Active")
 
     def is_ended(ev: dict) -> bool:
         closing = closing_of(ev)
@@ -1006,13 +1031,12 @@ def render_events_panel(events: List[dict], tab: int, event_names: List[str] = N
     )
 
     rows_html = []
-    for ev, is_end in [(e, False) for e in active] + [(e, True) for e in ended]:
+    for ev in active + ended:
         name = htmlmod.escape(ev.get("event_name") or "?")
         title = htmlmod.escape(ev.get("title") or "")
         url = htmlmod.escape(ev.get("url") or "", quote=True)
         dates = _fmt_event_range(ev.get("posted_date"), ev.get("closing_date"))
-        badge = "ended" if is_end else "active"
-        label = "Ended" if is_end else "Active"
+        badge, label = badge_for(ev)
         rows_html.append(
             f'    <a class="event-row" href="{url}" target="_blank" rel="noopener">\n'
             f'      <span class="event-badge {badge}">{label}</span>\n'
