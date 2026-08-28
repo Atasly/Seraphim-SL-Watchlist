@@ -392,9 +392,34 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--accent-glow);
 }
 .event-badge.closing {
-  background: rgba(251, 191, 36, .12);
-  color: #fbbf24;
-  border: 1px solid rgba(251, 191, 36, .4);
+  background: rgba(251, 146, 60, .13);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, .4);
+}
+.event-badge.cat-burgundy {
+  background: rgba(190, 24, 60, .15);
+  color: #fb7185;
+  border: 1px solid rgba(190, 24, 60, .45);
+}
+.event-badge.cat-violet {
+  background: rgba(160, 100, 250, .14);
+  color: #c4b5fd #8F00FF;
+  border: 1px solid rgba(160, 100, 250, .4);
+}
+.event-badge.cat-turquoise {
+  background: rgba(45, 212, 191, .12);
+  color: #2dd4bf;
+  border: 1px solid rgba(45, 212, 191, .4);
+}
+.event-badge.cat-gold {
+  background: rgba(250, 204, 21, .12);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, .4);
+}
+.event-badge.cat-grey {
+  background: var(--panel2);
+  color: var(--muted);
+  border: 1px solid var(--border);
 }
 .event-badge.ended {
   background: var(--panel2);
@@ -987,13 +1012,66 @@ def _fmt_event_range(posted: str, closing: str) -> str:
     return f"{o:%b %d} \u2013 {c:%b %d, %Y}"
 
 
-def render_events_panel(events: List[dict], tab: int, event_names: List[str] = None) -> str:
+_EVENT_CAT_COLORS = (
+    ("kinky", "burgundy"),
+    ("flf", "violet"),
+    ("syndicate", "turquoise"),
+    ("asian", "gold"),
+)
+
+
+def _event_cat_color_key(category: str) -> str:
+    low = (category or "").lower()
+    for keyword, key in _EVENT_CAT_COLORS:
+        if keyword in low:
+            return key
+    return "grey"
+
+
+def parse_event_categories(path) -> dict:
+    """Map each event alias in a watched-events file to its category.
+
+    A '# comment' line starts a category when it is short and free of
+    sentence punctuation ('# Kinky', '# FLF'); prose comments like the
+    file's usage note are ignored. Names before any header fall back to
+    'Others'. Returns {alias_lower: (display_label, color_key)}.
+    """
+    path = Path(path)
+    cat_map: dict = {}
+    if not path.exists():
+        return cat_map
+    current = ("Others", "grey")
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            header = line[1:].strip()
+            if (
+                header
+                and len(header) <= 30
+                and not any(ch in header for ch in ".,;!?")
+            ):
+                current = (header, _event_cat_color_key(header))
+            continue
+        cat_map[line.lower()] = current
+    return cat_map
+
+
+def render_events_panel(
+    events: List[dict],
+    tab: int,
+    event_names: List[str] = None,
+    event_cats: dict = None,
+) -> str:
     """Render the tracked-events panel.
 
     Deliberately avoids .card/.tab-count class names so the run-filter
     script (which toggles those globally) cannot touch event rows.
     When `event_names` is provided, a 'Watched events' directory listing
     every watched name (active chips carry the closing date) is appended.
+    Active rows also carry a category pill when `event_cats` maps their
+    alias to one.
     """
     today = datetime.now().date()
 
@@ -1037,9 +1115,18 @@ def render_events_panel(events: List[dict], tab: int, event_names: List[str] = N
         url = htmlmod.escape(ev.get("url") or "", quote=True)
         dates = _fmt_event_range(ev.get("posted_date"), ev.get("closing_date"))
         badge, label = badge_for(ev)
+        cat_html = ""
+        if badge != "ended" and event_cats:
+            cat = event_cats.get((ev.get("event_name") or "").strip().lower())
+            if cat:
+                cat_label, cat_key = cat
+                cat_html = (
+                    f'\n      <span class="event-badge cat-{cat_key}">'
+                    f"{htmlmod.escape(cat_label)}</span>"
+                )
         rows_html.append(
             f'    <a class="event-row" href="{url}" target="_blank" rel="noopener">\n'
-            f'      <span class="event-badge {badge}">{label}</span>\n'
+            f'      <span class="event-badge {badge}">{label}</span>{cat_html}\n'
             f'      <span class="event-name">{name}</span>\n'
             f'      <span class="event-title">{title}</span>\n'
             f'      <span class="event-dates">{htmlmod.escape(dates)}</span>\n'
@@ -1094,6 +1181,7 @@ def render_page(
     events: List[dict] = None,
     events_label: str = "Events",
     event_names: List[str] = None,
+    event_cats: dict = None,
 ) -> str:
     """Render the page. `tabs` is a list of (label, matches) tuples.
 
@@ -1120,7 +1208,9 @@ def render_page(
     events_tab = None
     if events is not None:
         events_tab = len(tabs)
-        panels.append(render_events_panel(events, events_tab, event_names or []))
+        panels.append(
+            render_events_panel(events, events_tab, event_names or [], event_cats or {})
+        )
 
     store_tab = len(tabs) + (1 if events is not None else 0)
     if store_sets:
@@ -1585,6 +1675,7 @@ def main() -> None:
         events = json.loads(events_path.read_text(encoding="utf-8"))
 
     event_names: List[str] = []
+    event_cats: dict = {}
     if args.events_list:
         list_path = Path(args.events_list)
         if not list_path.exists():
@@ -1594,6 +1685,7 @@ def main() -> None:
             line = line.strip()
             if line and not line.startswith("#"):
                 event_names.append(line)
+        event_cats = parse_event_categories(list_path)
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1606,6 +1698,7 @@ def main() -> None:
             events,
             args.events_label,
             event_names,
+            event_cats,
         ),
         encoding="utf-8",
     )

@@ -7,16 +7,12 @@ Salvage Station
 Night Market Collective
 
 # Asian
-Neo Tokyo
-#NeoTokyo
+Neo Japan
 Appare
-Kawaii Secrets
-Cyber Fair
-#CyberFair
 
 # FLF
 FLF Bday Bash
-# FLF Bash
+FLF-O-Ween
 
 # Kinky
 Kinky Monthly
@@ -24,6 +20,10 @@ Lewd Station
 Fetish Fair
 #FetishFair
 
+# Others
+Cyber Fair
+Kawaii Secrets
+Fantasy Faire
+Astrophe
 The Warehouse
 Abnormality
-Fantasy Faire
