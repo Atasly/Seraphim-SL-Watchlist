@@ -29,11 +29,10 @@ import html as htmlmod
 import json
 import re
 import sys
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 DEFAULT_INPUT = Path(__file__).parent / "matches.json"
 DEFAULT_OUTPUT = Path(__file__).parent / "docs" / "index.html"
@@ -838,6 +837,17 @@ def extract_slurl(caption_html: str) -> str:
     return htmlmod.unescape(m.group(0)) if m else ""
 
 
+_SLURL_SIM_RE = re.compile(r"/secondlife/([^/]+)/")
+
+
+def sim_from_slurl(slurl: str) -> str:
+    """Decoded region/sim name from a maps.secondlife.com teleport URL."""
+    if not slurl:
+        return ""
+    m = _SLURL_SIM_RE.search(slurl)
+    return unquote(m.group(1)) if m else ""
+
+
 def render_card(item: dict, index: int, tab: int) -> str:
     store = htmlmod.escape(item.get("store_name", ""))
     img = resolve_item_image(item, "image_url")
@@ -900,19 +910,22 @@ def _run_label(run: str) -> str:
 
 def render_flat_grid(matches: List[dict], tab: int) -> tuple:
     """Render one store list as a flat grid; return (html, lightbox items)."""
-    by_store: Dict[str, List[dict]] = defaultdict(list)
-    for item in matches:
-        by_store[item.get("store_name") or ""].append(item)
-
     if not matches:
         return '<div class="empty"><p>No matches yet. Run the scraper and regenerate.</p></div>', []
 
-    ordered = sorted(by_store.keys(), key=lambda n: n.lower())
-    flat: List[dict] = []
-    for store in ordered:
-        flat.extend(by_store[store])
-    # Stable order: store name only, so the "All" view reads alphabetically.
-    flat.sort(key=lambda it: it.get("store_name", "").lower())
+    # Order by landmark (region/sim) first so same-sim stores sit together
+    # and reduce hopping between sims, then by store name within a sim.
+    def sim_key(it: dict) -> str:
+        slurl = it.get("slurl") or extract_slurl(it.get("caption_html", ""))
+        return sim_from_slurl(slurl)
+
+    flat = sorted(
+        matches,
+        key=lambda it: (
+            sim_key(it).lower(),
+            it.get("store_name", "").lower(),
+        ),
+    )
     cards = "\n".join(render_card(it, i, tab) for i, it in enumerate(flat))
     items = [
         {
@@ -1391,11 +1404,12 @@ const TABS = {tabs_json};
     cap.innerHTML = html;
     lb.hidden = false;
     lb.setAttribute('aria-hidden', 'false');
-    document.body.style.overflow = 'hidden';
     if (img.complete && img.naturalWidth) {{
       spin.hidden = true;
       lb.classList.remove('loading');
     }}
+    const link = document.querySelector('.card-anchor[data-tab="' + curTab + '"][data-index="' + curIdx + '"]');
+    if (link) link.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
   }}
   img.addEventListener('load', function () {{
     if (img.dataset.seq == loadSeq) {{
@@ -1416,7 +1430,6 @@ const TABS = {tabs_json};
     cap.innerHTML = '';
     spin.hidden = true;
     lb.classList.remove('loading');
-    document.body.style.overflow = '';
     const link = document.querySelector('.card-anchor[data-tab="' + curTab + '"][data-index="' + curIdx + '"]');
     if (link) link.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
   }}
@@ -1520,8 +1533,8 @@ const TABS = {tabs_json};
   document.addEventListener('keydown', function (e) {{
     if (!lb.hidden) {{
       if (e.key === 'Escape') close();
-      else if (e.key === 'ArrowLeft') nav(-1);
-      else if (e.key === 'ArrowRight') nav(1);
+      else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') nav(-1);
+      else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') nav(1);
       return;
     }}
     if (e.key === 'Escape') window.scrollTo({{ top: 0, behavior: 'smooth' }});

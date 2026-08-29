@@ -19,6 +19,7 @@ Ducky
 
 # E
 Effervescence
+En Pointe
 
 # F
 Fendudu
@@ -34,6 +35,9 @@ Hime*Dream
 
 # I
 Inori
+
+# J
+Jeon
 
 # K
 Kiru
@@ -67,6 +71,7 @@ Seka
 Skellybones
 Salt & Pepper
 S&P
+Sacrilege
 
 # T
 theROOM
