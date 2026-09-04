@@ -16,6 +16,8 @@ Cheezu
 # D
 Daodao
 Ducky
+Domus
+Detention
 
 # E
 Effervescence
@@ -32,6 +34,8 @@ Happy Undead
 Hysteria
 HimeDream
 Hime*Dream
+Havok
+Heated
 
 # I
 Inori
@@ -55,6 +59,11 @@ M.mie
 Miwas
 miso
 MDN
+Mossu
+
+# N
+Neo Kitsch
+Neve
 
 # O
 Oracle
@@ -64,6 +73,7 @@ Orlaith Velvet
 Rebis
 Renie
 Red Blossom
+rekt.
 
 # S
 Suicidal Unborn
@@ -81,6 +91,7 @@ toksik
 Valentine
 Villena
 Violent seduction
+VOZ
 
 # W
 Web Dew
