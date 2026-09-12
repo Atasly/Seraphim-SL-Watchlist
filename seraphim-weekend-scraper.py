@@ -544,10 +544,24 @@ class SeraphimSource(SaleSource):
                 event = self._event_from_rest_post(post)
                 if event is None or event.url in seen_urls:
                     continue
-                ev_date = parse_post_date(event.posted_date) if event.posted_date else None
-                if since_date is not None and ev_date is not None and ev_date < since_date:
+                # The feed is ordered by publish date, so the cutoff must use
+                # the post's publication date. The excerpt-derived opening
+                # date can predate the window (e.g. an event that opened last
+                # week but was announced this week) and would otherwise stop
+                # pagination early and drop the rest of the batch.
+                published = None
+                post_day = (post.get("date") or "")[:10]
+                try:
+                    published = date.fromisoformat(post_day) if post_day else None
+                except ValueError:
+                    published = None
+                if (
+                    since_date is not None
+                    and published is not None
+                    and published < since_date
+                ):
                     debug_log(
-                        f"[listing] '{event.title}' ({event.posted_date}) is before "
+                        f"[listing] '{event.title}' published {published} is before "
                         f"cutoff {since_date}; stopping pagination"
                     )
                     stop = True
