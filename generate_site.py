@@ -774,6 +774,56 @@ a:hover { text-decoration: underline; }
   .lb-prev, .lb-next { top: auto; bottom: 22px; transform: none; }
 }
 
+/* Back-to-top button */
+.back-to-top {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: rgba(24, 24, 38, .9);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: opacity .18s ease, visibility .18s ease, transform .18s ease,
+              background .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.back-to-top.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+
+.back-to-top:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.back-to-top:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .back-to-top {
+    right: 14px;
+    bottom: 14px;
+  }
+}
+
 .site-footer {
   border-top: 1px solid var(--border);
   color: var(--faint);
@@ -1347,6 +1397,8 @@ def render_page(
   </figure>
 </div>
 
+<button id="back-to-top" class="back-to-top" type="button" aria-label="Back to top" title="Back to top">&#8593;</button>
+
 <script>
 const TABS = {tabs_json};
 (function () {{
@@ -1355,6 +1407,7 @@ const TABS = {tabs_json};
   const img = document.getElementById('lb-img');
   const cap = document.getElementById('lb-cap');
   const spin = document.getElementById('lb-spin');
+  const backToTop = document.getElementById('back-to-top');
   let curTab = 0;
   let curIdx = -1;
   let loadSeq = 0;
@@ -1530,6 +1583,18 @@ const TABS = {tabs_json};
   lb.addEventListener('click', function (e) {{
     if (e.target === lb) close();
   }});
+  function updateBackToTop() {{
+    if (backToTop) backToTop.classList.toggle('visible', window.scrollY > 300);
+  }}
+
+  if (backToTop) {{
+    backToTop.addEventListener('click', function () {{
+      window.scrollTo({{ top: 0, behavior: 'smooth' }});
+    }});
+    window.addEventListener('scroll', updateBackToTop, {{ passive: true }});
+    updateBackToTop();
+  }}
+
   document.addEventListener('keydown', function (e) {{
     if (!lb.hidden) {{
       if (e.key === 'Escape') close();
