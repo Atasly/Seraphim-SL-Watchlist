@@ -90,6 +90,7 @@ Mudskin
 Martyr
 Mercurial
 Mewsery
+Magika
 
 # N
 Nyaru
