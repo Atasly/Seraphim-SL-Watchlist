@@ -57,6 +57,7 @@ Friday
 Graal
 Goreglam
 Gorsimi
+Gloom
 
 # H
 Huntt
