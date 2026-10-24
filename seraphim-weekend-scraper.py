@@ -124,6 +124,11 @@ SALE_FEED_KEYWORDS = (
     "kinky 69", "waifu dreams", "7dayssale",
 )
 
+SALE_FEED_BLACKLIST_KEYWORDS = (
+    "warehouse sale",
+    "warehouse sales",
+)
+
 
 def debug_log(msg: str) -> None:
     if DEBUG:
@@ -435,7 +440,11 @@ class SeraphimSource(SaleSource):
     @staticmethod
     def _matches_feed_keywords(title: str, excerpt: str = "") -> bool:
         haystack = f"{title} {excerpt}".lower()
-        return any(k in haystack for k in SALE_FEED_KEYWORDS)
+
+        if any(k.lower() in haystack for k in SALE_FEED_BLACKLIST_KEYWORDS):
+            return False
+
+        return any(k.lower() in haystack for k in SALE_FEED_KEYWORDS)
 
     @staticmethod
     def _feed_last_page(module: BeautifulSoup) -> Optional[int]:
