@@ -24,6 +24,7 @@ Meld
 
 # Others
 Cyber Fair
+Creepy Fair
 Kawaii Secrets
 Fantasy Faire
 Astrophe
